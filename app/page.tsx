@@ -206,7 +206,7 @@ function AppHeader({ screen, onBack }: { screen: Screen; onBack?: () => void }) 
         <p className="eyebrow">AI DINING COPILOT</p>
         <h1>MenuMate</h1>
       </div>
-      <span className="demo-pill">DUMMY</span>
+      <span className="gemini-badge">실시간 Gemini 분석</span>
       <span className="screen-index" aria-label="진행 단계">
         {screen === "setup" ? "1/4" : screen === "analyzing" ? "2/4" : screen === "results" ? "3/4" : "4/4"}
       </span>
@@ -254,10 +254,9 @@ function SetupScreen({
   return (
     <div className="screen-content enter-animation">
       <section className="hero-card">
-        <p className="step-label">SCAN · DECIDE · ORDER</p>
-        <h2>낯선 메뉴도,<br />한 번에 결정하세요.</h2>
-        <p>메뉴판을 촬영하면 모두의 조건에 맞는 주문 조합을 찾아드려요.</p>
-        <div className="country-badge"><span>🇯🇵</span><div><small>오늘의 체험</small><strong>일본 식당</strong></div></div>
+        <p className="step-label">SCAN · UNDERSTAND · CHOOSE</p>
+        <h2>낯선 메뉴도,<br />한 번에 이해하세요.</h2>
+        <p>메뉴판을 촬영하면 AI가 원문, 한국어 설명, 가격과 주의 정보를 정리해드려요.</p>
       </section>
 
       <section className="form-card">

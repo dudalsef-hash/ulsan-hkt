@@ -253,3 +253,6 @@ button { color: inherit; }
 .optimal-total strong { color: #2563eb; }
 
 .optimal-caution { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; background: #fffbeb; color: #92400e; font-size: 9px; line-height: 1.4; }
+
+/* === Gemini 배지 (헤더 오른쪽 위) === */
+.gemini-badge { margin-left: auto; padding: 6px 10px; border-radius: 999px; color: var(--white); background: linear-gradient(135deg, #2563eb, #0d6a4e); font-size: 9px; font-weight: 900; letter-spacing: .03em; box-shadow: 0 4px 12px rgba(13, 106, 78, .2); }
