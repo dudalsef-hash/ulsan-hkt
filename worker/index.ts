@@ -7,8 +7,8 @@ import {
 import handler from "vinext/server/app-router-entry";
 
 interface Env {
-  ASSETS: Fetcher;
-  DB: D1Database;
+  ASSETS: { fetch(request: Request): Promise<Response> };
+  DB: unknown;
   GEMINI_API_KEY: string;
   IMAGES: {
     input(stream: ReadableStream): {
