@@ -418,6 +418,118 @@ function AnalyzingScreen({ activeStep, previewUrl }: { activeStep: number; previ
   );
 }
 
+/** 최적 메뉴 추천: 안전한 메뉴만 필터링 → 예산/인원에 맞는 조합 자동 계산 */
+function OptimalMenuRecommendation({
+  menuItems,
+  people,
+  budget,
+  selectedAllergies,
+}: {
+  menuItems: AnalyzedMenuItem[];
+  people: number;
+  budget: number;
+  selectedAllergies: AllergyItem[];
+}) {
+  const optimalCombo = useMemo(() => {
+    // 1. 안전한 메뉴만 필터링 (danger 제외, caution은 포함하되 표시)
+    const safeItems = menuItems.filter((item) => item.risk !== "danger");
+
+    if (safeItems.length === 0) return null;
+
+    // 2. 인원수에 맞게 메뉴 조합 계산 (예산 내에서 최대한 다양하게)
+    const perPersonBudget = budget / people;
+    const sorted = [...safeItems].sort((a, b) => a.price - b.price);
+
+    const selected: { item: AnalyzedMenuItem; quantity: number }[] = [];
+    let remaining = budget;
+    let totalItems = 0;
+    const targetItems = people + 1; // 인원수 + 1개 정도가 적절
+
+    // 가격대별로 다양하게 선택
+    for (const item of sorted) {
+      if (totalItems >= targetItems) break;
+      if (item.price <= remaining) {
+        const maxQty = Math.min(
+          Math.floor(remaining / item.price),
+          Math.ceil(people / 2), // 한 메뉴는 최대 인원/2개까지
+        );
+        const qty = Math.min(maxQty, targetItems - totalItems);
+        if (qty > 0) {
+          selected.push({ item, quantity: qty });
+          remaining -= item.price * qty;
+          totalItems += qty;
+        }
+      }
+    }
+
+    if (selected.length === 0) return null;
+
+    const totalPrice = selected.reduce((sum, s) => sum + s.item.price * s.quantity, 0);
+    const hasCaution = selected.some((s) => s.item.risk === "caution");
+
+    return { selected, totalPrice, remaining: budget - totalPrice, hasCaution, perPersonBudget };
+  }, [menuItems, people, budget]);
+
+  if (!optimalCombo) {
+    return (
+      <section className="optimal-card">
+        <div className="optimal-header"><span className="optimal-badge">OPTIMAL PICK</span></div>
+        <h3>최적 메뉴 추천</h3>
+        <p className="optimal-empty">안전한 메뉴가 없거나 예산 내 조합을 찾을 수 없습니다.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="optimal-card">
+      <div className="optimal-header">
+        <span className="optimal-badge">OPTIMAL PICK</span>
+        <span className="optimal-safe-badge">알레르기 안전 ✓</span>
+      </div>
+      <h3>최적 메뉴 추천</h3>
+      <p className="optimal-desc">
+        {selectedAllergies.length > 0
+          ? `${selectedAllergies.map((a) => a.name).join(", ")} 제외 · `
+          : ""}
+        {people}명 · 예산 ¥{budget.toLocaleString()} 기준
+      </p>
+
+      <div className="optimal-items">
+        {optimalCombo.selected.map(({ item, quantity }) => (
+          <div key={item.id} className="optimal-item">
+            <div className={`risk-dot ${item.risk}`} />
+            <div className="optimal-item-info">
+              <strong>{item.translatedName}</strong>
+              <small>{item.sourceName}</small>
+            </div>
+            <span className="optimal-qty">× {quantity}</span>
+            <b>¥{(item.price * quantity).toLocaleString()}</b>
+          </div>
+        ))}
+      </div>
+
+      <div className="optimal-summary">
+        <div className="optimal-total">
+          <small>추천 총액</small>
+          <strong>¥{optimalCombo.totalPrice.toLocaleString()}</strong>
+        </div>
+        <div className="optimal-remain">
+          <small>예산 잔액</small>
+          <strong>¥{optimalCombo.remaining.toLocaleString()}</strong>
+        </div>
+        <div className="optimal-per-person">
+          <small>1인당</small>
+          <strong>¥{Math.ceil(optimalCombo.totalPrice / people).toLocaleString()}</strong>
+        </div>
+      </div>
+
+      {optimalCombo.hasCaution && (
+        <p className="optimal-caution">⚠️ 일부 메뉴는 성분 확인이 필요할 수 있어요. 직원에게 확인하세요.</p>
+      )}
+    </section>
+  );
+}
+
 function ResultsScreen({ people, budget, selectedAllergies, previewUrl, analysisResult, analysisError, onOrder }: { people: number; budget: number; selectedAllergies: AllergyItem[]; previewUrl: string | null; analysisResult: AnalysisResult | null; analysisError: string | null; onOrder: () => void }) {
   // 실제 AI 결과가 있으면 사용, 없으면 더미 데이터 폴백
   const menuItems = analysisResult?.menuItems ?? mockMenuItems;
@@ -447,6 +559,14 @@ function ResultsScreen({ people, budget, selectedAllergies, previewUrl, analysis
       {warnings.length > 0 && warnings.map((w, i) => (
         <div key={i} className="alert-card" style={{ marginTop: 8 }}><span>🔍</span><div><p>{w}</p></div></div>
       ))}
+
+      {/* 최적 메뉴 추천 - 안전한 메뉴만 필터링 후 예산/인원 맞춤 */}
+      <OptimalMenuRecommendation
+        menuItems={menuItems}
+        people={people}
+        budget={budget}
+        selectedAllergies={selectedAllergies}
+      />
 
       <div className="section-heading menu-heading"><div><p>RECOGNIZED MENU</p><h3>인식한 메뉴</h3></div><button>전체 보기</button></div>
       <div className="menu-list">
