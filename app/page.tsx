@@ -500,7 +500,7 @@ function OptimalMenuRecommendation({
             <div className={`risk-dot ${item.risk}`} />
             <div className="optimal-item-info">
               <strong>{item.translatedName}</strong>
-              <small>{item.sourceName}</small>
+              <small>{item.sourceName} · 개당 ¥{item.price.toLocaleString()}</small>
             </div>
             <span className="optimal-qty">× {quantity}</span>
             <b>¥{(item.price * quantity).toLocaleString()}</b>
