@@ -1,0 +1,9 @@
+{
+  "menu": [
+    {"name": "삼겹살", "price": 6000, "qty": 3},
+    {"name": "공기밥", "price": 1000, "qty": 2},
+    {"name": "된장찌개", "price": 8000, "qty": 1},
+    {"name": "소주", "price": 5000, "qty": 2}
+  ],
+  "num_people": 4
+}
