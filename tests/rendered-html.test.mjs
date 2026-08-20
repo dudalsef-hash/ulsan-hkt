@@ -46,7 +46,8 @@ test("connects the mobile image inputs to the server analysis endpoint", async (
   assert.match(page, /accept="image\/\*"/);
   assert.match(page, /capture="environment"/);
   assert.match(page, /fetch\("\/api\/analyze-menu"/);
-  assert.doesNotMatch(page, /startDummyAnalysis|from "\.\/mock-data"/);
+  assert.doesNotMatch(page, /DUMMY|startDummyAnalysis|from "\.\/mock-data"/);
+  assert.doesNotMatch(css, /dummy-notice/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });

@@ -123,9 +123,9 @@ button { color: inherit; }
 .analysis-list li.done { color: var(--ink); }
 .analysis-list li i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: pulse 1s infinite; }
 @keyframes pulse { 50% { transform: scale(1.6); opacity: .35; } }
-.dummy-notice, .ai-notice { display: flex; margin-top: 13px; padding: 12px; flex-direction: column; gap: 3px; border-radius: 12px; color: #79601d; background: #fff6da; text-align: center; }
-.dummy-notice b, .ai-notice b { font-size: 10px; }
-.dummy-notice span, .ai-notice span { font-size: 9px; line-height: 1.45; }
+.ai-notice { display: flex; margin-top: 13px; padding: 12px; flex-direction: column; gap: 3px; border-radius: 12px; color: #79601d; background: #fff6da; text-align: center; }
+.ai-notice b { font-size: 10px; }
+.ai-notice span { font-size: 9px; line-height: 1.45; }
 
 .result-summary { display: flex; align-items: center; gap: 11px; padding: 15px; border-radius: 19px; color: var(--white); background: var(--green); }
 .result-icon { display: grid; width: 37px; height: 37px; flex: 0 0 auto; place-items: center; border-radius: 12px; color: var(--green); background: var(--white); font-weight: 900; }
