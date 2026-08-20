@@ -5,10 +5,12 @@ import {
   DEFAULT_IMAGE_SIZES,
 } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { handleAnalyzeMenuRequest } from "./gemini-menu-analysis";
 
 interface Env {
-  ASSETS: Fetcher;
-  DB: D1Database;
+  ASSETS: { fetch(request: Request): Promise<Response> };
+  DB: unknown;
+  GEMINI_API_KEY?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -33,6 +35,10 @@ const worker = {
     ctx: ExecutionContext,
   ): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/analyze-menu") {
+      return handleAnalyzeMenuRequest(request, env);
+    }
 
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];

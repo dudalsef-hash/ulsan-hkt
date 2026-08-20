@@ -31,25 +31,22 @@ test("server-renders the MenuMate mobile prototype", async () => {
   const html = await response.text();
   assert.match(html, /<title>MenuMate/);
   assert.match(html, /낯선 메뉴도/);
-  assert.match(html, /메뉴판 촬영하기/);
+  assert.match(html, /카메라로 촬영하기/);
   assert.match(html, /땅콩 알레르기/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview/);
 });
 
-test("keeps mock data separate from the interactive screen", async () => {
-  const [page, mockData, css, packageJson] = await Promise.all([
+test("connects the mobile image inputs to the server analysis endpoint", async () => {
+  const [page, css, packageJson] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/mock-data.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /from "\.\/mock-data"/);
   assert.match(page, /accept="image\/\*"/);
   assert.match(page, /capture="environment"/);
-  assert.match(page, /startDummyAnalysis/);
-  assert.match(mockData, /totalPrice:\s*3400/);
-  assert.match(mockData, /risk:\s*"danger"/);
+  assert.match(page, /fetch\("\/api\/analyze-menu"/);
+  assert.doesNotMatch(page, /startDummyAnalysis|from "\.\/mock-data"/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });
