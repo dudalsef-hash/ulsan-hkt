@@ -22,6 +22,7 @@
 .env
 .env.*
 !.env.example
+.dev.vars
 *.pem
 *.key
 
