@@ -14,7 +14,7 @@ export interface RecommendationItem {
 
 export function RecommendationCard({ item }: { item: RecommendationItem }) {
   return (
-    <article className="rec-card" tabIndex={0}>
+    <article className="rec-card">
       <div className="rec-card__icon">
         <UtensilsIcon size={20} />
       </div>

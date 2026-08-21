@@ -5,7 +5,7 @@ import { formatPrice } from "../utils/price";
 
 export function MenuItemCard({ item }: { item: MockMenuItem }) {
   return (
-    <article className="menu-item-card" tabIndex={0}>
+    <article className="menu-item-card">
       <div className="menu-item-card__left">
         <div className="menu-item-card__names">
           <span className="menu-item-card__source">{item.sourceName}</span>

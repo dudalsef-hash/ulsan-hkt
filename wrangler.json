@@ -1,6 +1,7 @@
 {
   "name": "ulsan-hkt",
   "main": "./worker/index.ts",
+  "keep_vars": true,
   "compatibility_date": "2024-12-01",
   "assets": {
     "directory": "./dist/client"

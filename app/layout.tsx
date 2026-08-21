@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Safe Plate — AI 식사 안전 추천",
+  title: "MenuMate · Safe Plate — AI 식사 안전 추천",
   description: "메뉴판을 촬영하고 조건에 맞는 안전한 주문 조합을 추천받으세요.",
   icons: {
     icon: "/favicon.svg",
