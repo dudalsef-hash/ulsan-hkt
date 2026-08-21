@@ -32,6 +32,7 @@ import {
   buildOrderPhrase,
   mergeRecommendationQuantities,
 } from "../lib/order-display";
+import { getDefaultBudget, getCurrencySymbol, getLanguageDisplayName, SUPPORTED_CURRENCIES } from "../lib/language-config";
 
 type Screen = "setup" | "analyzing" | "results" | "order";
 type MenuPhotoState =
@@ -93,6 +94,7 @@ const DIETARY_RESTRICTION_IDS = new Set([
 export default function Home() {
   const [screen, setScreen] = useState<Screen>("setup");
   const [people, setPeople] = useState(3);
+  const [currency, setCurrency] = useState("KRW");
   const [budget, setBudget] = useState(30000);
   const [selectedAllergies, setSelectedAllergies] = useState<AllergyItem[]>([
     ALLERGY_DATABASE.find((a) => a.id === "peanut")!,
@@ -107,6 +109,30 @@ export default function Home() {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const abortController = useRef<AbortController | null>(null);
   const previewUrlRef = useRef<string | null>(null);
+
+  // localStorage에서 사용자 설정 복원
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("safeplate-settings");
+      if (saved) {
+        const s = JSON.parse(saved);
+        if (s.currency) setCurrency(s.currency);
+        if (s.budget) setBudget(s.budget);
+        if (s.people) setPeople(s.people);
+      }
+    } catch { /* 기본값 사용 */ }
+  }, []);
+
+  // 설정 변경 시 localStorage 저장
+  useEffect(() => {
+    try { localStorage.setItem("safeplate-settings", JSON.stringify({ currency, budget, people })); } catch {}
+  }, [currency, budget, people]);
+
+  function handleCurrencyChange(newCurrency: string) {
+    setCurrency(newCurrency);
+    const defaults = getDefaultBudget(newCurrency);
+    setBudget(defaults.budget);
+  }
 
   useEffect(() => {
     return () => {
@@ -265,11 +291,13 @@ export default function Home() {
           <SetupScreen
             people={people}
             budget={budget}
+            currency={currency}
             selectedAllergies={selectedAllergies}
             avoidSpicy={avoidSpicy}
             errorMessage={errorMessage}
             onPeopleChange={setPeople}
             onBudgetChange={setBudget}
+            onCurrencyChange={handleCurrencyChange}
             onAllergiesChange={setSelectedAllergies}
             onSpicyChange={setAvoidSpicy}
             onImage={handleImage}
@@ -335,11 +363,13 @@ function AppHeader({ screen, isSample, onBack }: { screen: Screen; isSample: boo
 function SetupScreen({
   people,
   budget,
+  currency,
   selectedAllergies,
   avoidSpicy,
   errorMessage,
   onPeopleChange,
   onBudgetChange,
+  onCurrencyChange,
   onAllergiesChange,
   onSpicyChange,
   onImage,
@@ -347,11 +377,13 @@ function SetupScreen({
 }: {
   people: number;
   budget: number;
+  currency: string;
   selectedAllergies: AllergyItem[];
   avoidSpicy: boolean;
   errorMessage: string | null;
   onPeopleChange: (value: number) => void;
   onBudgetChange: (value: number) => void;
+  onCurrencyChange: (value: string) => void;
   onAllergiesChange: (value: AllergyItem[]) => void;
   onSpicyChange: (value: boolean) => void;
   onImage: (event: ChangeEvent<HTMLInputElement>) => void;
@@ -359,8 +391,10 @@ function SetupScreen({
 }) {
   const [allergySearch, setAllergySearch] = useState("");
   const [showAllergyPanel, setShowAllergyPanel] = useState(false);
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const searchResults = useMemo(() => searchAllergies(allergySearch), [allergySearch]);
   const categorized = useMemo(() => getAllergiesByCategory(), []);
+  const budgetDefaults = getDefaultBudget(currency);
 
   function toggleAllergy(item: AllergyItem) {
     const exists = selectedAllergies.find((a) => a.id === item.id);
@@ -402,8 +436,22 @@ function SetupScreen({
         <label className="budget-control">
           <span>💴</span>
           <div><strong>총예산</strong><small>현지 통화 기준</small></div>
-          <div className="budget-input"><b>₩</b><input type="number" min="5000" step="5000" value={budget} onChange={(event) => onBudgetChange(Number(event.target.value))} aria-label="총예산" /></div>
+          <div className="budget-input">
+            <button type="button" className="currency-selector" onClick={() => setShowCurrencyPicker(!showCurrencyPicker)}>{getCurrencySymbol(currency)} {currency} ▼</button>
+            <input type="number" min={budgetDefaults.min} step={budgetDefaults.step} value={budget} onChange={(event) => onBudgetChange(Number(event.target.value))} aria-label="총예산" />
+          </div>
         </label>
+        {showCurrencyPicker && (
+          <div className="currency-picker">
+            {SUPPORTED_CURRENCIES.map((curr) => (
+              <button key={curr.code} type="button" className={`currency-option ${curr.code === currency ? "active" : ""}`} onClick={() => { onCurrencyChange(curr.code); setShowCurrencyPicker(false); }}>
+                <span className="currency-option-symbol">{curr.symbol}</span>
+                <span className="currency-option-code">{curr.code}</span>
+                <span className="currency-option-name">{curr.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* 알레르기 검색 엔진 섹션 */}
         <div className="allergy-section">
