@@ -31,25 +31,38 @@ test("server-renders the MenuMate mobile prototype", async () => {
   const html = await response.text();
   assert.match(html, /<title>MenuMate/);
   assert.match(html, /낯선 메뉴도/);
-  assert.match(html, /메뉴판 촬영하기/);
-  assert.match(html, /땅콩 알레르기/);
+  assert.match(html, /카메라로 촬영하기/);
+  assert.match(html, /알레르기 &amp; 식이제한/);
+  assert.match(html, /땅콩/);
   assert.doesNotMatch(html, /codex-preview|SkeletonPreview/);
 });
 
-test("keeps mock data separate from the interactive screen", async () => {
-  const [page, mockData, css, packageJson] = await Promise.all([
+test("connects the mobile image inputs to the server analysis endpoint", async () => {
+  const [page, css, menuImage, packageJson] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/mock-data.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../lib/menu-image.ts", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /from "\.\/mock-data"/);
   assert.match(page, /accept="image\/\*"/);
   assert.match(page, /capture="environment"/);
-  assert.match(page, /startDummyAnalysis/);
-  assert.match(mockData, /totalPrice:\s*3400/);
-  assert.match(mockData, /risk:\s*"danger"/);
+  assert.match(page, /fetch\("\/api\/analyze-menu"/);
+  assert.match(page, /fetch\("\/api\/recommend-menu"/);
+  assert.match(page, /AI 조합 추천/);
+  assert.match(page, /이 조합 선택하기/);
+  assert.match(page, /선택한 조합으로 주문하기/);
+  assert.match(page, /function OrderScreen/);
+  assert.match(page, /partitionSelectedConditions/);
+  assert.match(page, /사진 보기/);
+  assert.match(page, /createPortal/);
+  assert.match(page, /getMenuImage/);
+  assert.match(menuImage, /findLocalMenuImage/);
+  assert.doesNotMatch(page, /DUMMY|startDummyAnalysis|from "\.\/mock-data"/);
+  assert.doesNotMatch(css, /dummy-notice/);
+  assert.match(css, /\.menu-photo-backdrop\s*\{[^}]*position:\s*fixed/);
+  assert.match(css, /\.recommendation-backdrop\s*\{[^}]*position:\s*fixed/);
+  assert.match(css, /overscroll-behavior:\s*contain/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });
