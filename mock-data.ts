@@ -28,5 +28,4 @@ export const recommendation = {
     { emoji: "🥟", name: "교자 6개", quantity: 1, price: 600 },
   ],
   totalPrice: 3400,
-  reason: "3명이 먹기 충분하고, 땅콩과 매운 메뉴를 제외했어요.",
 };

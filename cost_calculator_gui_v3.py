@@ -12,6 +12,7 @@ import math
 import re
 import json
 import os
+import csv
 
 
 class CostCalculatorApp:
@@ -41,18 +42,71 @@ class CostCalculatorApp:
 
     FONT = "맑은 고딕"
 
+    # 통화 옵션
+    CURRENCIES = [
+        ("₩ 원 (KRW)", "₩", "원"),
+        ("¥ 엔 (JPY)", "¥", "엔"),
+        ("$ 달러 (USD)", "$", "달러"),
+        ("€ 유로 (EUR)", "€", "유로"),
+        ("£ 파운드 (GBP)", "£", "파운드"),
+        ("¥ 위안 (CNY)", "¥", "위안"),
+        ("₫ 동 (VND)", "₫", "동"),
+        ("฿ 바트 (THB)", "฿", "바트"),
+    ]
+
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("더치페이 계산기")
-        self.root.geometry("560x900")
+        self.root.geometry("560x920")
         self.root.configure(bg=self.BG)
         self.root.resizable(True, True)
 
         self.menu_data = []
         self.check_vars = []
         self.last_result_text = ""
+        self.currency_symbol = "₩"
+        self.currency_name = "원"
+
+        # CSV 메뉴 DB 로드
+        self.menu_db = self._load_menu_csv()
 
         self._build_ui()
+
+    # =========================================================================
+    # CSV 메뉴 DB 로드
+    # =========================================================================
+
+    def _load_menu_csv(self) -> list:
+        """menu_class_mapping_with_price_krw.csv에서 메뉴 데이터 로드"""
+        csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "upload_img", "menu_class_mapping_with_price_krw.csv")
+        menu_db = []
+        if not os.path.exists(csv_path):
+            return menu_db
+
+        try:
+            with open(csv_path, "r", encoding="utf-8-sig") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    menu_db.append({
+                        "id": row.get("클래스ID", ""),
+                        "name": row.get("한국어메뉴", ""),
+                        "name_en": row.get("영어메뉴", ""),
+                        "category": row.get("대분류", ""),
+                        "price_jpy": int(row.get("가격(엔)", 0)),
+                        "price_krw": int(row.get("가격(원)", 0)),
+                        "image": row.get("이미지파일명", ""),
+                    })
+        except (IOError, ValueError):
+            pass
+
+        return menu_db
+
+    def _get_price_by_currency(self, item: dict) -> int:
+        """현재 통화 설정에 따라 가격 반환"""
+        if self.currency_name == "엔":
+            return item["price_jpy"]
+        return item["price_krw"]
 
     # =========================================================================
     # 유틸리티
@@ -114,17 +168,52 @@ class CostCalculatorApp:
         card1 = self._create_card(content)
         self._card_title(card1, "메뉴 추가", "주문한 메뉴를 하나씩 입력하세요")
 
-        # 9번: JSON 불러오기 버튼
-        json_load_frame = tk.Frame(card1, bg=self.CARD)
-        json_load_frame.pack(fill="x", padx=20, pady=(6, 0))
+        # 메뉴판 DB에서 선택하여 추가
+        menu_select_frame = tk.Frame(card1, bg=self.CARD)
+        menu_select_frame.pack(fill="x", padx=20, pady=(10, 0))
 
-        tk.Button(json_load_frame, text="JSON 불러오기", font=(self.FONT, 9),
+        tk.Label(menu_select_frame, text="메뉴판에서 선택", font=(self.FONT, 9, "bold"),
+                 bg=self.CARD, fg=self.TEXT_SEC).pack(anchor="w")
+
+        select_row = tk.Frame(menu_select_frame, bg=self.CARD)
+        select_row.pack(fill="x", pady=(4, 0))
+
+        # 드롭다운 옵션 생성
+        if self.menu_db:
+            menu_options = [f"{m['name']} ({m['category']})" for m in self.menu_db]
+        else:
+            menu_options = ["(CSV 파일 없음)"]
+
+        self.menu_select_var = tk.StringVar(value="메뉴를 선택하세요")
+        self.menu_dropdown = tk.OptionMenu(select_row, self.menu_select_var, *menu_options,
+                                           command=self._on_menu_select)
+        self.menu_dropdown.config(font=(self.FONT, 10), bg=self.BG, fg=self.TEXT,
+                                  highlightthickness=1, highlightbackground=self.BORDER,
+                                  relief="flat", width=25)
+        self.menu_dropdown.pack(side="left")
+
+        # 수량 입력 (드롭다운 옆)
+        tk.Label(select_row, text=" x", font=(self.FONT, 10, "bold"),
+                 bg=self.CARD, fg=self.TEXT).pack(side="left", padx=(4, 0))
+
+        self.entry_select_qty = tk.Entry(select_row, font=(self.FONT, 11), width=3,
+                                         bg=self.BG, relief="flat", highlightthickness=1,
+                                         highlightbackground=self.BORDER, justify="center")
+        self.entry_select_qty.insert(0, "1")
+        self.entry_select_qty.pack(side="left", padx=(4, 8), ipady=3)
+
+        tk.Button(select_row, text="추가", font=(self.FONT, 9, "bold"),
                   bg=self.SUCCESS, fg="white", bd=0, cursor="hand2",
                   activebackground="#059669", activeforeground="white",
-                  padx=10, pady=3, command=self._load_json).pack(side="left")
+                  padx=12, pady=4, command=self._add_from_select).pack(side="left")
 
-        tk.Label(json_load_frame, text="추천 알고리즘 결과 파일을 불러옵니다",
-                 font=(self.FONT, 8), bg=self.CARD, fg=self.TEXT_MUTED).pack(side="left", padx=(8, 0))
+        # 구분선
+        tk.Frame(card1, bg=self.BORDER, height=1).pack(fill="x", padx=20, pady=(10, 0))
+
+        # 직접 입력 라벨
+        manual_label = tk.Label(card1, text="또는 직접 입력", font=(self.FONT, 9),
+                                bg=self.CARD, fg=self.TEXT_MUTED)
+        manual_label.pack(padx=20, anchor="w", pady=(8, 0))
 
         # 입력 필드
         input_area = tk.Frame(card1, bg=self.CARD)
@@ -142,8 +231,9 @@ class CostCalculatorApp:
 
         col2 = tk.Frame(input_area, bg=self.CARD)
         col2.pack(side="left", padx=(0, 6))
-        tk.Label(col2, text="단가(원)", font=(self.FONT, 8), bg=self.CARD,
-                 fg=self.TEXT_MUTED).pack(anchor="w")
+        self.label_price_unit = tk.Label(col2, text=f"단가({self.currency_name})", font=(self.FONT, 8), bg=self.CARD,
+                 fg=self.TEXT_MUTED)
+        self.label_price_unit.pack(anchor="w")
         self.entry_price = tk.Entry(col2, font=(self.FONT, 11), width=10, bg=self.BG,
                                     relief="flat", highlightthickness=2,
                                     highlightcolor=self.PRIMARY,
@@ -280,7 +370,7 @@ class CostCalculatorApp:
 
         # 7번: 송금 계좌 입력
         row3 = tk.Frame(setting_inner, bg=self.CARD)
-        row3.pack(fill="x")
+        row3.pack(fill="x", pady=(10, 0))
 
         tk.Label(row3, text="송금 계좌", font=(self.FONT, 10, "bold"),
                  bg=self.CARD, fg=self.TEXT).pack(side="left")
@@ -296,6 +386,21 @@ class CostCalculatorApp:
         account_hint = tk.Label(setting_inner, text="예: 카카오뱅크 3333-01-1234567 홍길동",
                                 font=(self.FONT, 8), bg=self.CARD, fg=self.TEXT_MUTED)
         account_hint.pack(anchor="e", pady=(4, 0))
+
+        # 통화 선택
+        row4 = tk.Frame(setting_inner, bg=self.CARD)
+        row4.pack(fill="x", pady=(10, 0))
+
+        tk.Label(row4, text="통화", font=(self.FONT, 10, "bold"),
+                 bg=self.CARD, fg=self.TEXT).pack(side="left")
+
+        self.currency_var = tk.StringVar(value="₩ 원 (KRW)")
+        currency_labels = [c[0] for c in self.CURRENCIES]
+        self.currency_menu = tk.OptionMenu(row4, self.currency_var, *currency_labels,
+                                           command=self._on_currency_change)
+        self.currency_menu.config(font=(self.FONT, 9), bg=self.BG, fg=self.TEXT,
+                                  highlightthickness=0, relief="flat", bd=0)
+        self.currency_menu.pack(side="right")
 
         # --- 계산 버튼 ---
         tk.Button(content, text="계산하기", font=(self.FONT, 14, "bold"),
@@ -362,6 +467,18 @@ class CostCalculatorApp:
     # =========================================================================
     # 4번: 단가 자동 콤마 표시
     # =========================================================================
+
+    def _on_currency_change(self, selected):
+        """통화 변경 시 기호/이름 업데이트"""
+        for label, symbol, name in self.CURRENCIES:
+            if label == selected:
+                self.currency_symbol = symbol
+                self.currency_name = name
+                break
+        # 단가 라벨 업데이트
+        self.label_price_unit.config(text=f"단가({self.currency_name})")
+        # 리스트 새로고침 (통화 단위 반영)
+        self._refresh_list()
 
     def _on_price_key(self, event):
         """키 입력 시 콤마 자동 포맷"""
@@ -435,7 +552,7 @@ class CostCalculatorApp:
                      bg=bg, fg=self.TEXT, anchor="w").pack(side="left", padx=(0, 4))
 
             # 소계 (오른쪽 끝)
-            tk.Label(row, text=f"{subtotal:,}원", font=(self.FONT, 10, "bold"),
+            tk.Label(row, text=f"{subtotal:,}{self.currency_name}", font=(self.FONT, 10, "bold"),
                      bg=bg, fg=self.PRIMARY, anchor="e").pack(side="right", padx=(0, 10), pady=5)
 
             # +/- 수량 조절
@@ -457,11 +574,57 @@ class CostCalculatorApp:
             tk.Label(row, text=f"@{item['price']:,}", font=(self.FONT, 8),
                      bg=bg, fg=self.TEXT_MUTED, anchor="e").pack(side="right", padx=(0, 4))
 
-        self.label_total.config(text=f"총액  {total:,}원")
+        self.label_total.config(text=f"총액  {total:,}{self.currency_name}")
 
     # =========================================================================
     # 이벤트
     # =========================================================================
+
+    def _on_menu_select(self, selected):
+        """드롭다운에서 메뉴 선택 시"""
+        pass  # 선택만 하고, 추가 버튼 누를 때 실제 추가
+
+    def _add_from_select(self):
+        """드롭다운에서 선택한 메뉴를 추가"""
+        selected = self.menu_select_var.get()
+        if selected == "메뉴를 선택하세요" or selected == "(CSV 파일 없음)":
+            messagebox.showwarning("선택 필요", "메뉴를 선택하세요.")
+            return
+
+        # 선택된 메뉴 찾기
+        matched = None
+        for m in self.menu_db:
+            label = f"{m['name']} ({m['category']})"
+            if label == selected:
+                matched = m
+                break
+
+        if not matched:
+            messagebox.showerror("오류", "메뉴를 찾을 수 없습니다.")
+            return
+
+        # 수량
+        qty_str = self.entry_select_qty.get().strip()
+        qty = int(qty_str) if qty_str.isdigit() and int(qty_str) > 0 else 1
+
+        # 통화에 맞는 가격
+        price = self._get_price_by_currency(matched)
+
+        # 같은 메뉴가 이미 있으면 수량만 추가
+        for item in self.menu_data:
+            if item["name"] == matched["name"] and item["price"] == price:
+                item["qty"] += qty
+                self._refresh_list()
+                self.entry_select_qty.delete(0, tk.END)
+                self.entry_select_qty.insert(0, "1")
+                return
+
+        self.menu_data.append({"name": matched["name"], "price": price, "qty": qty})
+        self._refresh_list()
+
+        # 수량 리셋
+        self.entry_select_qty.delete(0, tk.END)
+        self.entry_select_qty.insert(0, "1")
 
     def _add_menu(self):
         name = self.entry_name.get().strip()
@@ -496,6 +659,17 @@ class CostCalculatorApp:
             except ValueError:
                 messagebox.showwarning("입력 오류", "수량은 1 이상 정수로 입력하세요.")
                 self.entry_qty.focus()
+                return
+
+        # 같은 메뉴+가격이 이미 있으면 수량만 추가
+        for item in self.menu_data:
+            if item["name"] == name and item["price"] == price:
+                item["qty"] += qty
+                self._refresh_list()
+                self.entry_name.delete(0, tk.END)
+                self.entry_price.delete(0, tk.END)
+                self.entry_qty.delete(0, tk.END)
+                self.entry_name.focus()
                 return
 
         self.menu_data.append({"name": name, "price": price, "qty": qty})
@@ -649,7 +823,7 @@ class CostCalculatorApp:
         tk.Label(self.result_inner, text="1인당 금액", font=(self.FONT, 10),
                  bg=bg, fg=self.RES_ACCENT).pack(pady=(0, 2))
 
-        tk.Label(self.result_inner, text=f"{per_person:,}원",
+        tk.Label(self.result_inner, text=f"{per_person:,}{self.currency_name}",
                  font=(self.FONT, 32, "bold"), bg=bg, fg=self.RES_GOLD).pack()
 
         # 구분선
@@ -658,11 +832,11 @@ class CostCalculatorApp:
 
         # 상세
         details = [
-            ("주문 총액", f"{total:,}원"),
+            ("주문 총액", f"{total:,}{self.currency_name}"),
             ("인원", f"{num_people}명"),
         ]
         if over > 0:
-            details.append(("올림 차액", f"+{over:,}원"))
+            details.append(("올림 차액", f"+{over:,}{self.currency_name}"))
 
         for label, value in details:
             row = tk.Frame(self.result_inner, bg=bg)
@@ -679,7 +853,7 @@ class CostCalculatorApp:
         # 송금 메시지
         msg_frame = tk.Frame(self.result_inner, bg="#312e81")
         msg_frame.pack(fill="x", pady=(0, 4))
-        tk.Label(msg_frame, text=f"각자 {per_person:,}원씩 보내주세요!",
+        tk.Label(msg_frame, text=f"각자 {per_person:,}{self.currency_name}씩 보내주세요!",
                  font=(self.FONT, 11, "bold"), bg="#312e81", fg="#c4b5fd",
                  pady=8).pack()
 
@@ -697,20 +871,21 @@ class CostCalculatorApp:
                   padx=16, pady=8, command=self._copy_result).pack(pady=(8, 4))
 
         # 복사용 텍스트 생성
+        cn = self.currency_name
         lines = []
         lines.append("[ 더치페이 계산 결과 ]")
         lines.append("")
         for item in self.menu_data:
-            lines.append(f"  {item['name']}  {item['price']:,}원 x {item['qty']}개 = {item['price'] * item['qty']:,}원")
+            lines.append(f"  {item['name']}  {item['price']:,}{cn} x {item['qty']}개 = {item['price'] * item['qty']:,}{cn}")
         lines.append(f"  ─────────────────")
-        lines.append(f"  총액: {total:,}원")
+        lines.append(f"  총액: {total:,}{cn}")
         lines.append(f"  인원: {num_people}명")
         lines.append(f"")
-        lines.append(f"  ▶ 1인당: {per_person:,}원")
+        lines.append(f"  ▶ 1인당: {per_person:,}{cn}")
         if over > 0:
-            lines.append(f"  (올림 +{over:,}원 포함)")
+            lines.append(f"  (올림 +{over:,}{cn} 포함)")
         lines.append(f"")
-        lines.append(f"  각자 {per_person:,}원씩 보내주세요!")
+        lines.append(f"  각자 {per_person:,}{cn}씩 보내주세요!")
         if account:
             lines.append(f"  송금 계좌: {account}")
         self.last_result_text = "\n".join(lines)
