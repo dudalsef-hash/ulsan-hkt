@@ -362,9 +362,6 @@ function renderResult(result) {
     </div>`;
   }
 
-  html += `<div class="disclaimer">⚠️ 재료와 알레르기 정보는 AI 추정 정보이므로 정확한 알레르기 유발 물질 및 성분은 매장 직원을 통해 반드시 확인하시기 바랍니다.</div>`;
-
-  // 메뉴 섹션
   html += `<div class="menu-section-title">RECOGNIZED MENU</div>`;
   html += `<div style="font-size:16px;font-weight:800;margin-bottom:12px;">인식한 메뉴</div>`;
 
@@ -401,10 +398,6 @@ function renderResult(result) {
           <div class="detail-label">분류</div>
           <div class="detail-value">${item.category}</div>
         </div>
-      </div>
-      <div class="confidence-row">
-        <span class="confidence-label">인식 신뢰도 ${item.confidence}%</span>
-        <div class="confidence-bar"><div class="confidence-fill" style="width:${item.confidence}%"></div></div>
       </div>
     </div>`;
   });
