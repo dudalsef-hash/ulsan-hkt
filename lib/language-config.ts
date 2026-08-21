@@ -193,11 +193,19 @@ export function formatPriceWithCurrency(price: number, currencyCode: string): st
   }
 }
 
+// ===== Safe Plate 기본 설정 (대한민국 기준) =====
+export const DEFAULT_SETTINGS = {
+  country: "KR",
+  language: "ko",
+  currency: "KRW",
+  locale: "ko-KR",
+} as const;
+
 /** 통화의 기본 예산 추천값 (해당 통화에서 일반적인 1인 식사 비용 수준) */
 export function getDefaultBudget(currencyCode: string): { budget: number; min: number; step: number } {
   switch (currencyCode.toUpperCase()) {
-    case "JPY": return { budget: 4000, min: 500, step: 500 };
-    case "KRW": return { budget: 50000, min: 5000, step: 5000 };
+    case "JPY": return { budget: 5000, min: 500, step: 500 };
+    case "KRW": return { budget: 30000, min: 5000, step: 5000 };
     case "USD": return { budget: 50, min: 5, step: 5 };
     case "EUR": return { budget: 40, min: 5, step: 5 };
     case "GBP": return { budget: 35, min: 5, step: 5 };

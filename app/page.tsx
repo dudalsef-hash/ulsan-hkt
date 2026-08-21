@@ -89,7 +89,7 @@ const DIETARY_RESTRICTION_IDS = new Set([
 export default function Home() {
   const [screen, setScreen] = useState<Screen>("setup");
   const [people, setPeople] = useState(3);
-  const [budget, setBudget] = useState(4000);
+  const [budget, setBudget] = useState(30000);
   const [selectedAllergies, setSelectedAllergies] = useState<AllergyItem[]>([
     ALLERGY_DATABASE.find((a) => a.id === "peanut")!,
   ]);
@@ -398,7 +398,7 @@ function SetupScreen({
         <label className="budget-control">
           <span>💴</span>
           <div><strong>총예산</strong><small>현지 통화 기준</small></div>
-          <div className="budget-input"><b>¥</b><input type="number" min="1000" step="500" value={budget} onChange={(event) => onBudgetChange(Number(event.target.value))} aria-label="총예산" /></div>
+          <div className="budget-input"><b>₩</b><input type="number" min="5000" step="5000" value={budget} onChange={(event) => onBudgetChange(Number(event.target.value))} aria-label="총예산" /></div>
         </label>
 
         {/* 알레르기 검색 엔진 섹션 */}
@@ -718,7 +718,7 @@ function ResultsScreen({
               AI 조합 추천
             </button>
           </div>
-          <span>{people}명 · 예산 ¥{budget.toLocaleString()} · 알레르기/제한 {selectedAllergies.length}개 · {analysis.detected_language ?? "언어 자동 감지"}</span>
+          <span>{people}명 · 예산 {budget.toLocaleString()}원 · 알레르기/제한 {selectedAllergies.length}개 · {analysis.detected_language ?? "언어 자동 감지"}</span>
         </div>
         {previewUrl && (
           // 선택한 로컬 Blob URL은 Next 이미지 최적화 대상이 아닙니다.
@@ -761,7 +761,7 @@ function ResultsScreen({
         <section className="selected-combination" aria-label="선택한 메뉴">
           <div className="section-heading">
             <div><p>SELECTED MENU</p><h3>선택한 메뉴</h3></div>
-            <strong>{formatPrice(selectedTotal, selectedMenus[0]?.menu.currency ?? "JPY")}</strong>
+            <strong>{formatPrice(selectedTotal, selectedMenus[0]?.menu.currency ?? "KRW")}</strong>
           </div>
           <div className="selected-combination-list">
             {selectedMenus.map(({ menuId, menu, quantity, subtotal }) => (
@@ -816,7 +816,7 @@ function OrderScreen({
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const selectedMenus = getSelectedMenus(analysis, selectedQuantities);
   const total = selectedMenus.reduce((sum, item) => sum + item.subtotal, 0);
-  const currency = selectedMenus[0]?.menu.currency ?? "JPY";
+  const currency = selectedMenus[0]?.menu.currency ?? "KRW";
   const splitAmounts = splitTotal(total, people);
   const orderText = buildOrderPhrase({
     language: analysis.detected_language,
@@ -968,7 +968,7 @@ function RecommendationPopup({
             <strong>{state.result.error}</strong>
             {typeof state.result.minimum_additional_budget === "number" && (
               <p>
-                예산을 {formatPrice(state.result.minimum_additional_budget, "JPY")} 늘리면
+                예산을 {formatPrice(state.result.minimum_additional_budget, "KRW")} 늘리면
                 인원수에 맞는 최소 조합을 선택할 수 있어요.
               </p>
             )}
@@ -1272,7 +1272,7 @@ function createSampleAnalysis(): MenuAnalysisResult {
   return {
     success: true,
     detected_language: "ja",
-    restaurant_context: "MenuMate 명시적 샘플 메뉴",
+    restaurant_context: "Safe Plate 샘플 메뉴 (일본 식당)",
     menus: [
       sampleMenu("えのきうどん", "팽이버섯 우동", 430, ["우동면", "팽이버섯"], ["밀", "대두"], "noodle"),
       sampleMenu("きつねうどん", "유부 우동", 520, ["우동면", "유부"], ["밀", "대두"], "noodle"),
