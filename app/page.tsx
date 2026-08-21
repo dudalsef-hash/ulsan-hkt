@@ -27,6 +27,7 @@ import {
   buildOrderPhrase,
   mergeRecommendationQuantities,
 } from "../lib/order-display";
+import { getLanguageDisplayName, getCurrencySymbol } from "../lib/language-config";
 
 type Screen = "setup" | "analyzing" | "results" | "order";
 type MenuPhotoState =
@@ -733,6 +734,13 @@ function ResultsScreen({
           allergies: selectedAllergies.map((item) => item.name),
         }}
       />
+
+      {analysis.detected_language && (
+        <div className="detected-language-badge" aria-label="감지된 언어">
+          <span>🌐</span>
+          <span>감지된 언어: {getLanguageDisplayName(analysis.detected_language)}</span>
+        </div>
+      )}
 
       {selectedAllergies.length > 0 && (
         <div className="alert-card"><span>⚠️</span><div><strong>{matchingMenuCount > 0 ? `선택 조건 관련 가능성 ${matchingMenuCount}개 발견` : "선택 조건과 직접 일치하는 표기를 찾지 못했어요"}</strong><p>{selectedConditionNames.join(", ")} 조건은 추천에서 우선 제외합니다. 표기가 없더라도 반드시 직원에게 확인하세요.</p></div></div>
