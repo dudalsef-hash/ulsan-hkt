@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Safe Plate - 알레르기 검색 엔진 + Gemini 메뉴 분석</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f0e7; min-height: 100vh; padding: 20px; }
+.container { max-width: 480px; margin: 0 auto; }
+h1 { font-size: 22px; color: #14231d; margin-bottom: 4px; }
+.subtitle { color: #68766f; font-size: 12px; margin-bottom: 20px; }
+
+/* 검색 섹션 */
+.section { background: #fff; border-radius: 18px; padding: 18px; margin-bottom: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+.section-title { font-size: 13px; font-weight: 800; color: #0d6a4e; margin-bottom: 10px; }
+.search-box { position: relative; }
+.search-box input { width: 100%; padding: 12px 40px 12px 14px; border: 1px solid #cbd9d2; border-radius: 12px; font-size: 14px; outline: none; transition: border .2s; }
+.search-box input:focus { border-color: #0d6a4e; box-shadow: 0 0 0 3px rgba(13,106,78,.1); }
+.search-clear { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: #b3bdb7; color: #fff; border: none; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; cursor: pointer; display: none; }
+
+/* 태그 */
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.tag { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; cursor: pointer; border: 1px solid #e6aaa3; background: #fff0ed; color: #8e2b27; }
+.tag .remove { font-weight: 900; margin-left: 2px; }
+
+/* 검색 결과 */
+.results { margin-top: 8px; max-height: 200px; overflow-y: auto; }
+.result-item { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-bottom: 1px solid #f3f5f4; cursor: pointer; border-radius: 8px; }
+.result-item:hover { background: #f0faf5; }
+.result-item.selected { background: #e8f5ee; }
+.result-emoji { font-size: 18px; }
+.result-info { flex: 1; }
+.result-info strong { font-size: 12px; display: block; }
+.result-info small { font-size: 10px; color: #68766f; }
+.result-action { width: 22px; height: 22px; border-radius: 50%; background: #eef2f0; display: grid; place-items: center; font-size: 11px; font-weight: 900; color: #68766f; }
+.result-item.selected .result-action { background: #0d6a4e; color: #fff; }
+
+/* 카테고리 */
+.category { margin-top: 12px; }
+.category h4 { font-size: 10px; font-weight: 900; color: #0d6a4e; letter-spacing: .05em; margin-bottom: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+.chip { padding: 5px 9px; border: 1px solid #dfe7e2; border-radius: 999px; font-size: 10px; cursor: pointer; background: #f8faf9; transition: all .12s; }
+.chip:hover { border-color: #9bc8b5; background: #f0faf5; }
+.chip.active { border-color: #e6aaa3; background: #fff0ed; color: #8e2b27; }
+
+/* 메뉴 분석 섹션 */
+.upload-area { border: 2px dashed #cbd9d2; border-radius: 14px; padding: 24px; text-align: center; cursor: pointer; transition: all .2s; }
+.upload-area:hover { border-color: #0d6a4e; background: #f0faf5; }
+.upload-area.has-image { border-style: solid; border-color: #0d6a4e; }
+.upload-icon { font-size: 32px; margin-bottom: 8px; }
+.upload-text { font-size: 12px; color: #68766f; }
+.upload-text strong { color: #14231d; display: block; font-size: 13px; margin-bottom: 4px; }
+.preview-img { max-width: 100%; max-height: 200px; border-radius: 10px; margin-top: 10px; }
+
+/* 설정 */
+.settings-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f0f2f1; }
+.settings-row:last-child { border-bottom: none; }
+.settings-label { flex: 1; font-size: 12px; font-weight: 700; }
+.settings-label small { display: block; color: #68766f; font-weight: 400; font-size: 10px; }
+.stepper { display: flex; align-items: center; gap: 6px; }
+.stepper button { width: 28px; height: 28px; border: 1px solid #dfe7e2; border-radius: 8px; background: #fff; cursor: pointer; font-size: 14px; }
+.stepper strong { min-width: 32px; text-align: center; font-size: 13px; }
+.budget-input { width: 90px; padding: 6px 8px; border: 1px solid #cbd9d2; border-radius: 8px; font-size: 13px; text-align: right; }
+
+/* 분석 버튼 */
+.analyze-btn { width: 100%; padding: 14px; border: none; border-radius: 14px; background: #0d6a4e; color: #fff; font-size: 14px; font-weight: 800; cursor: pointer; box-shadow: 0 8px 20px rgba(13,106,78,.2); transition: transform .1s; }
+.analyze-btn:active { transform: scale(.98); }
+.analyze-btn:disabled { background: #9bc8b5; cursor: not-allowed; }
+
+/* 결과 */
+.result-card { background: #fff; border-radius: 18px; padding: 18px; margin-top: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.06); display: none; }
+.result-card.visible { display: block; }
+.result-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.result-badge { padding: 4px 8px; border-radius: 6px; font-size: 9px; font-weight: 900; color: #fff; }
+.badge-safe { background: #0d6a4e; }
+.badge-caution { background: #d88a20; }
+.badge-danger { background: #d95149; }
+.menu-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #f5f5f5; }
+.menu-item:last-child { border-bottom: none; }
+.risk-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.risk-dot.safe { background: #36a475; }
+.risk-dot.caution { background: #d88a20; }
+.risk-dot.danger { background: #d95149; }
+.menu-info { flex: 1; }
+.menu-info strong { font-size: 12px; display: block; }
+.menu-info small { font-size: 9px; color: #68766f; }
+.menu-price { font-size: 12px; font-weight: 700; }
+
+/* 추천 */
+.recommend-box { margin-top: 14px; padding: 14px; border-radius: 14px; background: linear-gradient(145deg, #f0faf5, #fff); border: 1px solid #a9d2c0; }
+.recommend-title { font-size: 11px; font-weight: 900; color: #0d6a4e; margin-bottom: 8px; }
+.recommend-reason { font-size: 10px; color: #68766f; margin-bottom: 10px; }
+.recommend-item { display: flex; justify-content: space-between; padding: 4px 0; font-size: 11px; }
+.recommend-total { margin-top: 8px; padding-top: 8px; border-top: 1px solid #e3ece7; font-weight: 800; font-size: 13px; display: flex; justify-content: space-between; }
+
+/* 로딩 */
+.loading { display: none; text-align: center; padding: 30px; }
+.loading.visible { display: block; }
+.spinner { width: 32px; height: 32px; border: 3px solid #e3ece7; border-top-color: #0d6a4e; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 12px; color: #68766f; }
+
+/* 에러 */
+.error-msg { padding: 12px; background: #fff0ed; border-radius: 10px; color: #8e2b27; font-size: 11px; margin-top: 10px; display: none; }
+.error-msg.visible { display: block; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Safe Plate</h1>
+  <p class="subtitle">알레르기 검색 엔진 + Gemini AI 메뉴 분석 테스트</p>
+
+  <!-- 알레르기 검색 -->
+  <div class="section">
+    <div class="section-title">⚠️ 알레르기 & 식이제한 선택</div>
+    <div class="search-box">
+      <input type="text" id="allergySearch" placeholder="검색 (예: 땅콩, milk, エビ, gluten...)">
+      <button class="search-clear" id="searchClear" onclick="clearSearch()">×</button>
+    </div>
+    <div class="tags" id="selectedTags"></div>
+    <div class="results" id="searchResults"></div>
+    <div id="categoryPanel"></div>
+  </div>
+
+  <!-- 설정 -->
+  <div class="section">
+    <div class="section-title">👥 식사 조건</div>
+    <div class="settings-row">
+      <div class="settings-label">인원<small>함께 식사하는 사람</small></div>
+      <div class="stepper">
+        <button onclick="changePeople(-1)">−</button>
+        <strong id="peopleCount">3</strong>
+        <button onclick="changePeople(1)">+</button>
+      </div>
+    </div>
+    <div class="settings-row">
+      <div class="settings-label">총예산<small>현지 통화 기준</small></div>
+      <span>¥</span><input type="number" class="budget-input" id="budgetInput" value="4000" min="500" step="500">
+    </div>
+  </div>
+
+  <!-- 메뉴판 업로드 -->
+  <div class="section">
+    <div class="section-title">📷 메뉴판 촬영/업로드</div>
+    <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+      <div class="upload-icon">▣</div>
+      <div class="upload-text">
+        <strong>메뉴판 사진을 올려주세요</strong>
+        클릭하거나 파일을 드래그하세요
+      </div>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFile(event)">
+    <img id="previewImg" class="preview-img" style="display:none">
+  </div>
+
+  <!-- 분석 버튼 -->
+  <button class="analyze-btn" id="analyzeBtn" onclick="analyzeMenu()">Gemini AI로 메뉴 분석하기</button>
+
+  <!-- 로딩 -->
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <div class="loading-text">Gemini AI가 메뉴판을 분석 중입니다...</div>
+  </div>
+
+  <!-- 에러 -->
+  <div class="error-msg" id="errorMsg"></div>
+
+  <!-- 결과 -->
+  <div class="result-card" id="resultCard">
+    <div class="result-header">
+      <strong>분석 결과</strong>
+    </div>
+    <div id="menuList"></div>
+    <div class="recommend-box" id="recommendBox"></div>
+  </div>
+</div>
+
+<script>
+// ===== 알레르기 데이터베이스 =====
+const ALLERGY_DATABASE = [
+  { id: "peanut", emoji: "🥜", name: "땅콩", nameEn: "Peanut", category: "주요 8대 알레르기", keywords: ["땅콩", "peanut", "ピーナッツ", "落花生"] },
+  { id: "milk", emoji: "🥛", name: "우유", nameEn: "Milk", category: "주요 8대 알레르기", keywords: ["우유", "유제품", "milk", "dairy", "牛乳"] },
+  { id: "egg", emoji: "🥚", name: "달걀", nameEn: "Egg", category: "주요 8대 알레르기", keywords: ["달걀", "계란", "egg", "卵"] },
+  { id: "wheat", emoji: "🌾", name: "밀", nameEn: "Wheat", category: "주요 8대 알레르기", keywords: ["밀", "글루텐", "wheat", "gluten", "小麦"] },
+  { id: "soy", emoji: "🫘", name: "대두", nameEn: "Soy", category: "주요 8대 알레르기", keywords: ["대두", "콩", "soy", "soybean", "大豆"] },
+  { id: "treenut", emoji: "🌰", name: "견과류(전체)", nameEn: "Tree Nuts", category: "주요 8대 알레르기", keywords: ["견과류", "tree nut", "ナッツ"] },
+  { id: "shellfish", emoji: "🦐", name: "갑각류", nameEn: "Shellfish", category: "주요 8대 알레르기", keywords: ["갑각류", "새우", "게", "shellfish", "shrimp", "エビ", "カニ"] },
+  { id: "fish", emoji: "🐟", name: "생선", nameEn: "Fish", category: "주요 8대 알레르기", keywords: ["생선", "어류", "fish", "魚"] },
+  { id: "almond", emoji: "🔸", name: "아몬드", nameEn: "Almond", category: "견과류", keywords: ["아몬드", "almond", "アーモンド"] },
+  { id: "walnut", emoji: "🔸", name: "호두", nameEn: "Walnut", category: "견과류", keywords: ["호두", "walnut", "クルミ"] },
+  { id: "cashew", emoji: "🔸", name: "캐슈넛", nameEn: "Cashew", category: "견과류", keywords: ["캐슈넛", "cashew", "カシューナッツ"] },
+  { id: "shrimp", emoji: "🦐", name: "새우", nameEn: "Shrimp", category: "해산물", keywords: ["새우", "shrimp", "prawn", "エビ"] },
+  { id: "crab", emoji: "🦀", name: "게", nameEn: "Crab", category: "해산물", keywords: ["게", "crab", "カニ"] },
+  { id: "squid", emoji: "🦑", name: "오징어", nameEn: "Squid", category: "해산물", keywords: ["오징어", "squid", "イカ"] },
+  { id: "cheese", emoji: "🧀", name: "치즈", nameEn: "Cheese", category: "유제품/계란", keywords: ["치즈", "cheese", "チーズ"] },
+  { id: "butter", emoji: "🧈", name: "버터", nameEn: "Butter", category: "유제품/계란", keywords: ["버터", "butter", "バター"] },
+  { id: "gluten", emoji: "🌾", name: "글루텐", nameEn: "Gluten", category: "곡물/채소/과일", keywords: ["글루텐", "gluten", "グルテン"] },
+  { id: "buckwheat", emoji: "🌾", name: "메밀", nameEn: "Buckwheat", category: "곡물/채소/과일", keywords: ["메밀", "buckwheat", "そば", "蕎麦"] },
+  { id: "sesame", emoji: "🔸", name: "참깨", nameEn: "Sesame", category: "곡물/채소/과일", keywords: ["참깨", "깨", "sesame", "ゴマ"] },
+  { id: "peach", emoji: "🍑", name: "복숭아", nameEn: "Peach", category: "곡물/채소/과일", keywords: ["복숭아", "peach", "桃"] },
+  { id: "pork", emoji: "🐷", name: "돼지고기", nameEn: "Pork", category: "육류", keywords: ["돼지고기", "pork", "豚肉"] },
+  { id: "beef", emoji: "🐄", name: "소고기", nameEn: "Beef", category: "육류", keywords: ["소고기", "beef", "牛肉"] },
+  { id: "chicken", emoji: "🐔", name: "닭고기", nameEn: "Chicken", category: "육류", keywords: ["닭고기", "chicken", "鶏肉"] },
+  { id: "msg", emoji: "🧂", name: "MSG", nameEn: "MSG", category: "조미료/첨가물", keywords: ["msg", "글루타민산", "味の素"] },
+  { id: "soy_sauce", emoji: "🫗", name: "간장", nameEn: "Soy Sauce", category: "조미료/첨가물", keywords: ["간장", "soy sauce", "醤油"] },
+  { id: "spicy", emoji: "🌶️", name: "매운 음식", nameEn: "Spicy Food", category: "기타", keywords: ["매운", "spicy", "辛い", "고추"] },
+  { id: "alcohol", emoji: "🍺", name: "주류/알코올", nameEn: "Alcohol", category: "기타", keywords: ["알코올", "술", "alcohol"] },
+];
+
+const CATEGORIES = ["주요 8대 알레르기", "견과류", "해산물", "유제품/계란", "곡물/채소/과일", "육류", "조미료/첨가물", "기타"];
+
+// ===== 상태 =====
+let selectedAllergies = [];
+let people = 3;
+let imageBase64 = null;
+
+// Gemini API 키
+const GEMINI_API_KEY = "AQ.Ab8RN6LaQt30dEq6cY-PO9Rhx1NblrBNzjK2wLUI7CA6OGm0wA";
+
+// ===== 초기화 =====
+window.onload = function() {
+  renderCategories();
+  renderTags();
+};
+
+// ===== 검색 =====
+document.getElementById('allergySearch').addEventListener('input', function(e) {
+  const q = e.target.value.toLowerCase().trim();
+  const clearBtn = document.getElementById('searchClear');
+  clearBtn.style.display = q ? 'block' : 'none';
+
+  if (!q) { document.getElementById('searchResults').innerHTML = ''; return; }
+
+  const results = ALLERGY_DATABASE.filter(item =>
+    item.name.toLowerCase().includes(q) ||
+    item.nameEn.toLowerCase().includes(q) ||
+    item.keywords.some(kw => kw.toLowerCase().includes(q))
+  );
+
+  const html = results.slice(0, 8).map(item => {
+    const isSelected = selectedAllergies.some(a => a.id === item.id);
+    return `<div class="result-item ${isSelected ? 'selected' : ''}" onclick="toggleAllergy('${item.id}')">
+      <span class="result-emoji">${item.emoji}</span>
+      <div class="result-info"><strong>${item.name}</strong><small>${item.nameEn} · ${item.category}</small></div>
+      <div class="result-action">${isSelected ? '✓' : '+'}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('searchResults').innerHTML = html;
+});
+
+function clearSearch() {
+  document.getElementById('allergySearch').value = '';
+  document.getElementById('searchClear').style.display = 'none';
+  document.getElementById('searchResults').innerHTML = '';
+}
+
+// ===== 알레르기 선택/해제 =====
+function toggleAllergy(id) {
+  const item = ALLERGY_DATABASE.find(a => a.id === id);
+  const exists = selectedAllergies.find(a => a.id === id);
+  if (exists) {
+    selectedAllergies = selectedAllergies.filter(a => a.id !== id);
+  } else {
+    selectedAllergies.push(item);
+  }
+  renderTags();
+  renderCategories();
+  // 검색 결과 갱신
+  document.getElementById('allergySearch').dispatchEvent(new Event('input'));
+}
+
+function renderTags() {
+  const html = selectedAllergies.map(item =>
+    `<span class="tag" onclick="toggleAllergy('${item.id}')">${item.emoji} ${item.name} <span class="remove">×</span></span>`
+  ).join('');
+  document.getElementById('selectedTags').innerHTML = html;
+}
+
+// ===== 카테고리 렌더링 =====
+function renderCategories() {
+  const html = CATEGORIES.map(cat => {
+    const items = ALLERGY_DATABASE.filter(a => a.category === cat);
+    const chips = items.map(item => {
+      const isActive = selectedAllergies.some(a => a.id === item.id);
+      return `<span class="chip ${isActive ? 'active' : ''}" onclick="toggleAllergy('${item.id}')">${item.emoji} ${item.name}</span>`;
+    }).join('');
+    return `<div class="category"><h4>${cat}</h4><div class="chips">${chips}</div></div>`;
+  }).join('');
+  document.getElementById('categoryPanel').innerHTML = html;
+}
+
+// ===== 인원 =====
+function changePeople(delta) {
+  people = Math.max(1, Math.min(8, people + delta));
+  document.getElementById('peopleCount').textContent = people;
+}
+
+// ===== 이미지 업로드 =====
+function handleFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = document.getElementById('previewImg');
+    img.src = e.target.result;
+    img.style.display = 'block';
+    document.getElementById('uploadArea').classList.add('has-image');
+    // base64 추출
+    imageBase64 = e.target.result.split(',')[1];
+  };
+  reader.readAsDataURL(file);
+}
+
+// ===== Gemini API 메뉴 분석 =====
+async function analyzeMenu() {
+  const budget = parseInt(document.getElementById('budgetInput').value) || 4000;
+  const allergyList = selectedAllergies.map(a => `${a.name}(${a.nameEn})`).join(", ");
+
+  // UI 상태
+  document.getElementById('loading').classList.add('visible');
+  document.getElementById('resultCard').classList.remove('visible');
+  document.getElementById('errorMsg').classList.remove('visible');
+  document.getElementById('analyzeBtn').disabled = true;
+
+  const prompt = `당신은 레스토랑 메뉴판을 분석하는 AI 도우미입니다.
+
+사용자 조건:
+- 인원: ${people}명
+- 예산: ¥${budget} (현지 통화)
+- 알레르기/식이제한: ${allergyList || "없음"}
+
+${imageBase64 ? "첨부된 메뉴판 이미지를 분석하여" : "다음 샘플 일본 식당 메뉴를 분석하여"} 아래 JSON 형식으로 응답해주세요.
+
+${!imageBase64 ? `샘플 메뉴:
+- 豚骨ラーメン (돈코츠라멘) ¥1,000
+- 醤油ラーメン (쇼유라멘) ¥900
+- 担々麺 (탄탄멘) ¥1,100 - 땅콩 소스 사용, 매운맛
+- 焼き餃子 6個 (교자 6개) ¥600
+- チャーシュー丼 (차슈덮밥) ¥900
+- 鶏の唐揚げ 5個 (닭튀김 5개) ¥700
+- ピーナッツ冷奴 (피넛 냉두부) ¥500 - 땅콩, 대두
+- 枝豆 (에다마메) ¥400 - 대두
+` : ""}
+
+각 메뉴에 대해:
+1. 원래 이름, 한국어 번역, 가격 정리
+2. 식재료를 추론하고 알레르기 목록과 대조
+3. risk 판정: "safe"(안전), "caution"(확인필요), "danger"(위험)
+4. 예산/인원에 맞는 최적 주문 조합 추천
+
+반드시 JSON으로만 응답:
+{
+  "menuItems": [{"id":"","sourceName":"","translatedName":"","price":0,"risk":"safe","evidence":""}],
+  "recommendation": {"items":[{"emoji":"","name":"","quantity":0,"price":0}],"totalPrice":0,"reason":""},
+  "allergyWarnings": []
+}`;
+
+  const parts = [];
+  if (imageBase64) {
+    parts.push({ inlineData: { mimeType: "image/jpeg", data: imageBase64 } });
+  }
+  parts.push({ text: prompt });
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: { temperature: 0.3, maxOutputTokens: 4096, responseMimeType: "application/json" }
+        })
+      }
+    );
+
+    if (!response.ok) throw new Error(`API 오류: ${response.status}`);
+
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error("Gemini 응답이 비어있습니다");
+
+    const cleaned = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const result = JSON.parse(cleaned);
+    renderResult(result, budget);
+  } catch (err) {
+    document.getElementById('errorMsg').textContent = `오류: ${err.message}`;
+    document.getElementById('errorMsg').classList.add('visible');
+  } finally {
+    document.getElementById('loading').classList.remove('visible');
+    document.getElementById('analyzeBtn').disabled = false;
+  }
+}
+
+// ===== 결과 렌더링 =====
+function renderResult(result, budget) {
+  // 메뉴 리스트
+  const menuHtml = result.menuItems.map(item => `
+    <div class="menu-item">
+      <div class="risk-dot ${item.risk}"></div>
+      <div class="menu-info">
+        <strong>${item.translatedName}</strong>
+        <small>${item.sourceName} · ${item.evidence}</small>
+      </div>
+      <span class="menu-price">¥${item.price.toLocaleString()}</span>
+    </div>
+  `).join('');
+  document.getElementById('menuList').innerHTML = menuHtml;
+
+  // 추천
+  const rec = result.recommendation;
+  const recHtml = `
+    <div class="recommend-title">🎯 최적 메뉴 추천</div>
+    <div class="recommend-reason">${rec.reason}</div>
+    ${rec.items.map(i => `<div class="recommend-item"><span>${i.emoji} ${i.name} × ${i.quantity}</span><span>¥${(i.price * i.quantity).toLocaleString()}</span></div>`).join('')}
+    <div class="recommend-total"><span>총액</span><span>¥${rec.totalPrice.toLocaleString()} (잔액 ¥${Math.max(0, budget - rec.totalPrice).toLocaleString()})</span></div>
+  `;
+  document.getElementById('recommendBox').innerHTML = recHtml;
+
+  // 경고
+  if (result.allergyWarnings?.length > 0) {
+    const warnings = result.allergyWarnings.map(w => `<div style="padding:4px 0;font-size:11px;">⚠️ ${w}</div>`).join('');
+    document.getElementById('menuList').insertAdjacentHTML('beforebegin', `<div style="background:#fff0ed;padding:10px;border-radius:10px;margin-bottom:10px;">${warnings}</div>`);
+  }
+
+  document.getElementById('resultCard').classList.add('visible');
+}
+</script>
+</body>
+</html>
