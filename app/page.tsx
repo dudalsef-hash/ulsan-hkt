@@ -1,14 +1,28 @@
 "use client";
 
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type {
   AnalyzedMenuItem,
   MenuAnalysisError,
   MenuAnalysisResult,
   SpicyLevel,
 } from "../lib/gemini-menu-analysis";
+import { getMenuImage, type MenuImage } from "../lib/menu-image";
+import type {
+  MenuRecommendationError,
+  MenuRecommendationResponse,
+  MenuRecommendationSuccess,
+} from "../lib/menu-recommendation";
 
 type Screen = "setup" | "analyzing" | "results";
+type MenuPhotoState =
+  | { status: "idle" | "loading" | "not-found" | "error" }
+  | { status: "ready"; image: MenuImage };
+type RecommendationViewState =
+  | { status: "idle" | "loading" }
+  | { status: "success"; result: MenuRecommendationSuccess }
+  | { status: "error"; result: MenuRecommendationError };
 
 const MAX_SOURCE_IMAGE_BYTES = 25 * 1024 * 1024;
 const MAX_UPLOAD_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -374,12 +388,131 @@ function ResultsScreen({
   const peanutMatches = analysis.menus.filter((menu) =>
     menu.allergens.some((item) => /땅콩|낙화생|peanut/i.test(item)),
   ).length;
+  const [recommendationOpen, setRecommendationOpen] = useState(false);
+  const [recommendationState, setRecommendationState] =
+    useState<RecommendationViewState>({ status: "idle" });
+  const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({});
+  const [selectionMessage, setSelectionMessage] = useState<string | null>(null);
+  const recommendationRequestActive = useRef(false);
+  const recommendationAbortController = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => recommendationAbortController.current?.abort();
+  }, []);
+
+  async function requestRecommendation(useAlternative = false) {
+    if (recommendationRequestActive.current) return;
+    recommendationRequestActive.current = true;
+    setRecommendationOpen(true);
+    setRecommendationState({ status: "loading" });
+
+    const controller = new AbortController();
+    recommendationAbortController.current = controller;
+    const previousCombination =
+      useAlternative && recommendationState.status === "success"
+        ? recommendationState.result.recommendation.items.map(({ menu_id, quantity }) => ({
+            menu_id,
+            quantity,
+          }))
+        : undefined;
+
+    try {
+      const response = await fetch("/api/recommend-menu", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conditions: {
+            people,
+            budget,
+            allergies: peanutAllergy ? ["땅콩"] : [],
+            dietary_restrictions: avoidSpicy ? ["맵지 않게"] : [],
+            avoid_spicy: avoidSpicy,
+          },
+          menus: analysis.menus,
+          previous_combination: previousCombination,
+        }),
+        signal: controller.signal,
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | MenuRecommendationResponse
+        | null;
+
+      if (!payload || typeof payload.success !== "boolean") {
+        throw new Error("AI 추천 응답을 읽지 못했습니다. 다시 시도해주세요.");
+      }
+      if (!response.ok || payload.success === false) {
+        setRecommendationState({
+          status: "error",
+          result:
+            payload.success === false
+              ? payload
+              : { success: false, error: "AI 메뉴 조합 추천에 실패했습니다." },
+        });
+        return;
+      }
+      setRecommendationState({ status: "success", result: payload });
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setRecommendationState({
+        status: "error",
+        result: {
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "네트워크 오류가 발생했습니다. 연결을 확인해주세요.",
+        },
+      });
+    } finally {
+      recommendationRequestActive.current = false;
+      if (recommendationAbortController.current === controller) {
+        recommendationAbortController.current = null;
+      }
+    }
+  }
+
+  function applyRecommendation(result: MenuRecommendationSuccess) {
+    setSelectedQuantities((current) => {
+      const next = { ...current };
+      for (const item of result.recommendation.items) {
+        next[item.menu_id] = (next[item.menu_id] ?? 0) + item.quantity;
+      }
+      return next;
+    });
+    setSelectionMessage("추천 조합을 선택한 메뉴에 추가했어요.");
+    setRecommendationOpen(false);
+  }
+
+  const selectedMenus = Object.entries(selectedQuantities).flatMap(
+    ([menuId, quantity]) => {
+      const index = Number(menuId.replace("menu-", ""));
+      const menu = analysis.menus[index];
+      if (!menu || menu.price === null) return [];
+      return [{ menuId, menu, quantity, subtotal: menu.price * quantity }];
+    },
+  );
+  const selectedTotal = selectedMenus.reduce((sum, item) => sum + item.subtotal, 0);
 
   return (
     <div className="screen-content enter-animation results-screen">
       <section className="result-summary">
         <div className="result-icon">✓</div>
-        <div><p>분석 완료</p><h2>{analysis.menus.length}개 메뉴를 찾았어요</h2><span>{people}명 · 예산 ¥{budget.toLocaleString()} · {analysis.detected_language ?? "언어 자동 감지"}</span></div>
+        <div className="result-summary-copy">
+          <p>분석 완료</p>
+          <div className="result-title-row">
+            <h2>{analysis.menus.length}개 메뉴를 찾았어요</h2>
+            <button
+              type="button"
+              className="ai-combination-button"
+              onClick={() => void requestRecommendation()}
+              disabled={recommendationState.status === "loading"}
+              aria-haspopup="dialog"
+            >
+              AI 조합 추천
+            </button>
+          </div>
+          <span>{people}명 · 예산 ¥{budget.toLocaleString()} · {analysis.detected_language ?? "언어 자동 감지"}</span>
+        </div>
         {previewUrl && (
           // 선택한 로컬 Blob URL은 Next 이미지 최적화 대상이 아닙니다.
           // eslint-disable-next-line @next/next/no-img-element
@@ -402,14 +535,182 @@ function ResultsScreen({
         ))}
       </div>
 
+      {selectedMenus.length > 0 && (
+        <section className="selected-combination" aria-label="선택한 메뉴">
+          <div className="section-heading">
+            <div><p>SELECTED MENU</p><h3>선택한 메뉴</h3></div>
+            <strong>{formatPrice(selectedTotal, selectedMenus[0]?.menu.currency ?? "JPY")}</strong>
+          </div>
+          <div className="selected-combination-list">
+            {selectedMenus.map(({ menuId, menu, quantity, subtotal }) => (
+              <div key={menuId}>
+                <span>{menu.korean_name || menu.original_name}</span>
+                <small>{quantity}개</small>
+                <b>{formatPrice(subtotal, menu.currency)}</b>
+              </div>
+            ))}
+          </div>
+          {selectionMessage && <p role="status">✓ {selectionMessage}</p>}
+        </section>
+      )}
+
       <button className="primary-button" onClick={onRestart}>다른 메뉴판 분석하기 <span>→</span></button>
       <p className="safety-note">⚠️ AI가 추정한 정보이며 실제 재료·알레르기·조리 과정은 매장에 확인하세요.</p>
+      {recommendationOpen && typeof document !== "undefined" &&
+        createPortal(
+          <RecommendationPopup
+            state={recommendationState}
+            people={people}
+            budget={budget}
+            onClose={() => setRecommendationOpen(false)}
+            onRetry={() => void requestRecommendation()}
+            onAlternative={() => void requestRecommendation(true)}
+            onSelect={applyRecommendation}
+          />,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+function RecommendationPopup({
+  state,
+  people,
+  budget,
+  onClose,
+  onRetry,
+  onAlternative,
+  onSelect,
+}: {
+  state: RecommendationViewState;
+  people: number;
+  budget: number;
+  onClose: () => void;
+  onRetry: () => void;
+  onAlternative: () => void;
+  onSelect: (result: MenuRecommendationSuccess) => void;
+}) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  const recommendation = state.status === "success" ? state.result.recommendation : null;
+
+  return (
+    <div className="recommendation-backdrop" role="presentation">
+      <button
+        type="button"
+        className="recommendation-dismiss-layer"
+        aria-label="AI 추천 닫기"
+        onClick={onClose}
+      />
+      <section
+        className="recommendation-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="recommendation-title"
+      >
+        <div className="recommendation-handle" aria-hidden="true" />
+        <div className="recommendation-header">
+          <div>
+            <p>GEMINI PICK</p>
+            <h2 id="recommendation-title">AI 추천 조합</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="AI 추천 닫기">×</button>
+        </div>
+
+        {state.status === "loading" && (
+          <div className="recommendation-loading" role="status">
+            <span className="menu-photo-spinner" aria-hidden="true" />
+            <strong>AI가 메뉴 조합을 고르고 있어요...</strong>
+            <p>알레르기, 총예산과 인원수를 함께 확인하고 있어요.</p>
+          </div>
+        )}
+
+        {state.status === "error" && (
+          <div className="recommendation-error" role="alert">
+            <span aria-hidden="true">🍽️</span>
+            <strong>{state.result.error}</strong>
+            {typeof state.result.minimum_additional_budget === "number" && (
+              <p>
+                예산을 {formatPrice(state.result.minimum_additional_budget, "JPY")} 늘리면
+                인원수에 맞는 최소 조합을 선택할 수 있어요.
+              </p>
+            )}
+            <button type="button" onClick={onRetry}>다시 추천받기</button>
+          </div>
+        )}
+
+        {state.status === "success" && recommendation && (
+          <>
+            <p className="recommendation-intro">
+              {people}명이 {formatPrice(budget, recommendation.currency)} 이내에서 먹기 좋은 조합이에요.
+            </p>
+            <ol className="recommendation-items">
+              {recommendation.items.map((item) => (
+                <li key={item.menu_id}>
+                  <div>
+                    <strong>{item.korean_name || item.original_name}</strong>
+                    <small>{formatPrice(item.unit_price, item.currency)} × {item.quantity}개</small>
+                  </div>
+                  <b>{formatPrice(item.subtotal, item.currency)}</b>
+                </li>
+              ))}
+            </ol>
+            <div className="recommendation-budget">
+              <div><span>총 금액</span><strong>{formatPrice(recommendation.total_price, recommendation.currency)} / {formatPrice(recommendation.total_budget, recommendation.currency)}</strong></div>
+              <div><span>남은 예산</span><strong>{formatPrice(recommendation.remaining_budget, recommendation.currency)}</strong></div>
+            </div>
+            <div className="recommendation-reason">
+              <strong>추천 이유</strong>
+              <p>{recommendation.reason}</p>
+            </div>
+            <p className="recommendation-allergy-note">
+              알레르기 정보는 AI 분석 결과이므로 주문 전 매장에 다시 확인해주세요.
+            </p>
+            {state.result.message && <p className="recommendation-message" role="status">{state.result.message}</p>}
+            <div className="recommendation-actions">
+              <button type="button" className="secondary-recommendation-button" onClick={onAlternative} disabled={!state.result.has_alternative}>
+                다른 조합 보기
+              </button>
+              <button type="button" className="select-recommendation-button" onClick={() => onSelect(state.result)}>
+                이 조합 선택하기
+              </button>
+            </div>
+          </>
+        )}
+      </section>
     </div>
   );
 }
 
 function MenuCard({ item, index }: { item: AnalyzedMenuItem; index: number }) {
   const risk = item.allergens.length > 0 ? "danger" : item.warning ? "caution" : "safe";
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [photoState, setPhotoState] = useState<MenuPhotoState>({ status: "idle" });
+
+  async function openPhoto() {
+    setPhotoOpen(true);
+    if (
+      photoState.status === "loading" ||
+      photoState.status === "ready" ||
+      photoState.status === "not-found"
+    ) {
+      return;
+    }
+
+    setPhotoState({ status: "loading" });
+    try {
+      const image = await getMenuImage(item.original_name, item.korean_name);
+      setPhotoState(image ? { status: "ready", image } : { status: "not-found" });
+    } catch {
+      setPhotoState({ status: "error" });
+    }
+  }
 
   return (
     <article className="menu-item detailed-menu-item">
@@ -417,7 +718,18 @@ function MenuCard({ item, index }: { item: AnalyzedMenuItem; index: number }) {
         <div className={`risk-dot ${risk}`} />
         <div className="menu-copy">
           <small>{item.original_name || `메뉴 ${index + 1}`}</small>
-          <strong>{item.korean_name || item.original_name}</strong>
+          <div className="menu-name-row">
+            <strong>{item.korean_name || item.original_name}</strong>
+            <button
+              type="button"
+              className="menu-photo-button"
+              onClick={() => void openPhoto()}
+              aria-haspopup="dialog"
+              aria-expanded={photoOpen}
+            >
+              사진 보기
+            </button>
+          </div>
         </div>
         <b>{formatPrice(item.price, item.currency)}</b>
       </div>
@@ -431,7 +743,89 @@ function MenuCard({ item, index }: { item: AnalyzedMenuItem; index: number }) {
       </div>
       <div className="confidence-row"><span>인식 신뢰도 {Math.round(item.confidence * 100)}%</span><i><b style={{ width: `${Math.round(item.confidence * 100)}%` }} /></i></div>
       {item.warning && <p className="item-warning">⚠️ {item.warning}</p>}
+      {photoOpen && typeof document !== "undefined" &&
+        createPortal(
+          <MenuPhotoPopup
+            menuName={item.korean_name || item.original_name || `메뉴 ${index + 1}`}
+            state={photoState}
+            onClose={() => setPhotoOpen(false)}
+            onImageError={() => setPhotoState({ status: "not-found" })}
+          />,
+          document.body,
+        )}
     </article>
+  );
+}
+
+function MenuPhotoPopup({
+  menuName,
+  state,
+  onClose,
+  onImageError,
+}: {
+  menuName: string;
+  state: MenuPhotoState;
+  onClose: () => void;
+  onImageError: () => void;
+}) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="menu-photo-backdrop" role="presentation">
+      <button
+        type="button"
+        className="menu-photo-dismiss-layer"
+        aria-label="사진 닫기"
+        onClick={onClose}
+      />
+      <div
+        className="menu-photo-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${menuName} 대표 사진`}
+      >
+        {state.status === "loading" && (
+          <div className="menu-photo-status" role="status">
+            <span className="menu-photo-spinner" aria-hidden="true" />
+            <p>대표 사진을 찾고 있어요.</p>
+          </div>
+        )}
+
+        {(state.status === "not-found" || state.status === "error") && (
+          <div className="menu-photo-status" role="status">
+            <span aria-hidden="true">🍽️</span>
+            <p>대표 이미지를 찾지 못했어요.</p>
+          </div>
+        )}
+
+        {state.status === "ready" && (
+          <>
+            {/* Wikimedia의 외부 썸네일은 버튼을 누른 뒤에만 렌더링합니다. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={state.image.url}
+              alt={state.image.alt}
+              loading="lazy"
+              decoding="async"
+              onError={onImageError}
+            />
+            <div className="menu-photo-caption">
+              <strong>{menuName}</strong>
+              <small>
+                출처 · {state.image.attribution}
+                {state.image.license ? ` · ${state.image.license}` : ""}
+              </small>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

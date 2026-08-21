@@ -37,17 +37,28 @@ test("server-renders the MenuMate mobile prototype", async () => {
 });
 
 test("connects the mobile image inputs to the server analysis endpoint", async () => {
-  const [page, css, packageJson] = await Promise.all([
+  const [page, css, menuImage, packageJson] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../lib/menu-image.ts", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /accept="image\/\*"/);
   assert.match(page, /capture="environment"/);
   assert.match(page, /fetch\("\/api\/analyze-menu"/);
+  assert.match(page, /fetch\("\/api\/recommend-menu"/);
+  assert.match(page, /AI 조합 추천/);
+  assert.match(page, /이 조합 선택하기/);
+  assert.match(page, /사진 보기/);
+  assert.match(page, /createPortal/);
+  assert.match(page, /getMenuImage/);
+  assert.match(menuImage, /findLocalMenuImage/);
   assert.doesNotMatch(page, /DUMMY|startDummyAnalysis|from "\.\/mock-data"/);
   assert.doesNotMatch(css, /dummy-notice/);
+  assert.match(css, /\.menu-photo-backdrop\s*\{[^}]*position:\s*fixed/);
+  assert.match(css, /\.recommendation-backdrop\s*\{[^}]*position:\s*fixed/);
+  assert.match(css, /overscroll-behavior:\s*contain/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });

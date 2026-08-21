@@ -6,6 +6,8 @@ import {
 } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 import { handleAnalyzeMenuRequest } from "./gemini-menu-analysis";
+import { handleMenuImageRequest } from "./menu-image";
+import { handleRecommendMenuRequest } from "./menu-recommendation";
 
 interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -38,6 +40,14 @@ const worker = {
 
     if (url.pathname === "/api/analyze-menu") {
       return handleAnalyzeMenuRequest(request, env);
+    }
+
+    if (url.pathname === "/api/menu-image") {
+      return handleMenuImageRequest(request);
+    }
+
+    if (url.pathname === "/api/recommend-menu") {
+      return handleRecommendMenuRequest(request, env);
     }
 
     if (url.pathname === "/_vinext/image") {
