@@ -303,7 +303,7 @@ button { color: inherit; }
 }
 
 @media (max-width: 390px) {
-  .condition-summary { grid-template-columns: 1fr; gap: 6px; }
+  .condition-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .result-summary { align-items: flex-start; }
   .result-summary img { display: none; }
   .result-title-row { align-items: flex-start; }

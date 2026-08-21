@@ -313,11 +313,11 @@ function AppHeader({ screen, isSample, onBack }: { screen: Screen; isSample: boo
       {onBack ? (
         <button className="icon-button" onClick={onBack} aria-label="처음으로 돌아가기">←</button>
       ) : (
-        <div className="brand-mark" aria-hidden="true">M</div>
+        <div className="brand-mark" aria-hidden="true">SP</div>
       )}
       <div className="brand-copy">
         <p className="eyebrow">AI DINING COPILOT</p>
-        <h1>MenuMate</h1>
+        <h1>Safe Plate</h1>
       </div>
       <span className="demo-pill">{isSample ? "SAMPLE" : "GEMINI AI"}</span>
       <span className="screen-index" aria-label="진행 단계">
@@ -1064,8 +1064,6 @@ function MenuCard({ item, index }: { item: AnalyzedMenuItem; index: number }) {
         <DetailRow label="매운맛" value={SPICY_LABELS[item.spicy_level]} tone={item.spicy_level === "hot" ? "danger" : "neutral"} />
         <DetailRow label="분류" value={item.category} tone="neutral" />
       </div>
-      <div className="confidence-row"><span>인식 신뢰도 {Math.round(item.confidence * 100)}%</span><i><b style={{ width: `${Math.round(item.confidence * 100)}%` }} /></i></div>
-      {item.warning && <p className="item-warning">⚠️ {item.warning}</p>}
       {photoOpen && typeof document !== "undefined" &&
         createPortal(
           <MenuPhotoPopup
