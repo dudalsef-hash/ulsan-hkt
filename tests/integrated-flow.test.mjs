@@ -3,9 +3,10 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("keeps the integrated allergy, order, and modern Gemini flows connected", async () => {
-  const [page, allergyData, worker, gemini, gitignore, varsExample] = await Promise.all([
+  const [page, allergyData, orderDisplay, worker, gemini, gitignore, varsExample] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/allergy-data.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/order-display.ts", import.meta.url), "utf8"),
     readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/gemini-menu-analysis.ts", import.meta.url), "utf8"),
     readFile(new URL("../.gitignore", import.meta.url), "utf8"),
@@ -18,11 +19,13 @@ test("keeps the integrated allergy, order, and modern Gemini flows connected", a
   assert.match(page, /conditions\.allergies/);
   assert.match(page, /conditions\.dietaryRestrictions/);
   assert.match(page, /selectedQuantities/);
-  assert.match(page, /buildOrderText/);
-  assert.match(page, /buildAllergyQuestion/);
+  assert.match(page, /buildOrderPhrase/);
+  assert.match(page, /buildAllergyCheckPhrase/);
   assert.match(page, /splitTotal/);
   assert.match(page, /사진 없이 샘플 메뉴로 체험하기 \(SAMPLE\)/);
   assert.doesNotMatch(page, /mockMenuItems|startDummyAnalysis|폴백 모드/);
+  assert.match(orderDisplay, /mergeRecommendationQuantities/);
+  assert.match(orderDisplay, /一つ/);
 
   assert.match(worker, /handleAnalyzeMenuRequest/);
   assert.match(worker, /handleMenuImageRequest/);
@@ -34,5 +37,5 @@ test("keeps the integrated allergy, order, and modern Gemini flows connected", a
   assert.match(gitignore, /^\.dev\.vars\.\*$/m);
   assert.match(gitignore, /^!\.dev\.vars\.example$/m);
   assert.match(gitignore, /^\*\.tsbuildinfo$/m);
-  assert.equal(varsExample.trim().endsWith("GEMINI_API_KEY="), true);
+  assert.match(varsExample, /^GEMINI_API_KEY=(?:|your-gemini-api-key-here)$/m);
 });
