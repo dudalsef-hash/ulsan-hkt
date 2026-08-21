@@ -2,32 +2,20 @@
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { mockMenuItems, recommendation } from "./mock-data";
-import { AllergyItem, ALLERGY_DATABASE, ALLERGY_CATEGORIES, searchAllergies, getAllergiesByCategory } from "./allergy-data";
+import type { MockMenuItem } from "./mock-data";
+import { Header } from "./components/Header";
+import { ConditionSummary } from "./components/ConditionSummary";
+import type { Condition } from "./components/ConditionSummary";
+import { RecommendationCard } from "./components/RecommendationCard";
+import { MenuItemCard } from "./components/MenuItemCard";
+import { PriceSummary } from "./components/PriceSummary";
+import { SplitBillCard } from "./components/SplitBillCard";
+import { LoadingState, EmptyState, ErrorState } from "./components/StateScreens";
+import { SparklesIcon, CheckIcon, UtensilsIcon } from "./components/Icons";
+
 
 type Screen = "setup" | "analyzing" | "results" | "order";
-
-interface AnalyzedMenuItem {
-  id: string;
-  sourceName: string;
-  translatedName: string;
-  price: number;
-  risk: "safe" | "caution" | "danger";
-  evidence: string;
-}
-
-interface RecommendationResult {
-  items: { emoji: string; name: string; quantity: number; price: number }[];
-  totalPrice: number;
-  reason: string;
-}
-
-interface AnalysisResult {
-  menuItems: AnalyzedMenuItem[];
-  recommendation: RecommendationResult;
-  allergyWarnings: string[];
-  orderText: { local: string; korean: string };
-  allergyQuestion: { local: string; korean: string };
-}
+type AppState = "idle" | "loading" | "success" | "error" | "empty";
 
 const ANALYSIS_STEPS = [
   "메뉴판의 글자를 읽고 있어요",
@@ -38,25 +26,34 @@ const ANALYSIS_STEPS = [
 
 export default function Home() {
   const [screen, setScreen] = useState<Screen>("setup");
+  const [appState, setAppState] = useState<AppState>("idle");
   const [people, setPeople] = useState(3);
   const [budget, setBudget] = useState(4000);
-  const [selectedAllergies, setSelectedAllergies] = useState<AllergyItem[]>([
-    ALLERGY_DATABASE.find((a) => a.id === "peanut")!,
-  ]);
+  const [peanutAllergy, setPeanutAllergy] = useState(true);
+  const [avoidSpicy, setAvoidSpicy] = useState(true);
   const [analysisStep, setAnalysisStep] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const totalPrice = analysisResult?.recommendation.totalPrice ?? recommendation.totalPrice;
-  const splitAmounts = useMemo(() => {
-    const base = Math.floor(totalPrice / people);
-    const remainder = totalPrice % people;
-    return Array.from({ length: people }, (_, index) =>
-      base + (index < remainder ? 1 : 0),
-    );
-  }, [people, totalPrice]);
+  const condition: Condition = useMemo(() => ({
+    people,
+    budget,
+    allergies: [
+      ...(peanutAllergy ? ["땅콩"] : []),
+      ...(avoidSpicy ? ["매운 음식"] : []),
+    ],
+  }), [people, budget, peanutAllergy, avoidSpicy]);
+
+  const recommendedItems = useMemo(() => {
+    return recommendation.items.map((rec) => {
+      const menuItem = mockMenuItems.find((m) => m.translatedName === rec.name);
+      return {
+        ...rec,
+        risk: menuItem?.risk,
+        evidence: menuItem?.evidence,
+      };
+    });
+  }, []);
 
   useEffect(() => {
     return () => timers.current.forEach(clearTimeout);
@@ -68,64 +65,23 @@ export default function Home() {
     };
   }, [previewUrl]);
 
-  async function startAnalysis(file?: File) {
+  function startDummyAnalysis(file?: File) {
     timers.current.forEach(clearTimeout);
     timers.current = [];
 
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(file ? URL.createObjectURL(file) : null);
     setAnalysisStep(0);
-    setAnalysisResult(null);
-    setAnalysisError(null);
+    setAppState("loading");
     setScreen("analyzing");
 
-    // 분석 단계 애니메이션
     [650, 1300, 1950].forEach((delay, index) => {
       timers.current.push(setTimeout(() => setAnalysisStep(index + 1), delay));
     });
-
-    const startTime = Date.now();
-
-    try {
-      // Gemini API 호출
-      let imageBase64: string | null = null;
-      if (file) {
-        imageBase64 = await fileToBase64(file);
-      }
-
-      const response = await fetch("/api/analyze-menu", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          image: imageBase64,
-          allergies: selectedAllergies.map((a) => ({ id: a.id, name: a.name, nameEn: a.nameEn })),
-          people,
-          budget,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("API 호출 실패");
-      }
-
-      const result: AnalysisResult = await response.json();
-      setAnalysisResult(result);
-      
-      // 최소 2.7초는 분석 애니메이션 보여주기
-      const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, 2700 - elapsed);
-      timers.current.push(setTimeout(() => setScreen("results"), remaining));
-    } catch {
-      // API 실패 시 더미 데이터로 폴백
-      setAnalysisError("AI 분석을 사용할 수 없어 샘플 결과를 표시합니다.");
-      const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, 2700 - elapsed);
-      timers.current.push(setTimeout(() => setScreen("results"), remaining));
-    }
-  }
-
-  function startDummyAnalysis(file?: File) {
-    startAnalysis(file);
+    timers.current.push(setTimeout(() => {
+      setAppState("success");
+      setScreen("results");
+    }, 2700));
   }
 
   function handleImage(event: ChangeEvent<HTMLInputElement>) {
@@ -139,27 +95,25 @@ export default function Home() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setAnalysisStep(0);
-    setAnalysisResult(null);
-    setAnalysisError(null);
+    setAppState("idle");
     setScreen("setup");
   }
 
   return (
     <main className="app-shell">
-      <div className="ambient ambient-one" />
-      <div className="ambient ambient-two" />
-
-      <section className="phone-frame" aria-live="polite">
-        <AppHeader screen={screen} onBack={screen === "setup" ? undefined : resetDemo} />
+      <div className="app-container">
+        <Header />
 
         {screen === "setup" && (
           <SetupScreen
             people={people}
             budget={budget}
-            selectedAllergies={selectedAllergies}
+            peanutAllergy={peanutAllergy}
+            avoidSpicy={avoidSpicy}
             onPeopleChange={setPeople}
             onBudgetChange={setBudget}
-            onAllergiesChange={setSelectedAllergies}
+            onPeanutChange={setPeanutAllergy}
+            onSpicyChange={setAvoidSpicy}
             onImage={handleImage}
             onSample={() => startDummyAnalysis()}
           />
@@ -171,103 +125,75 @@ export default function Home() {
 
         {screen === "results" && (
           <ResultsScreen
-            people={people}
-            budget={budget}
-            selectedAllergies={selectedAllergies}
-            previewUrl={previewUrl}
-            analysisResult={analysisResult}
-            analysisError={analysisError}
+            condition={condition}
+            recommendedItems={recommendedItems}
+            menuItems={mockMenuItems}
+            totalPrice={recommendation.totalPrice}
+            appState={appState}
             onOrder={() => setScreen("order")}
+            onRetry={() => startDummyAnalysis()}
           />
         )}
 
         {screen === "order" && (
           <OrderScreen
-            splitAmounts={splitAmounts}
-            selectedAllergies={selectedAllergies}
-            analysisResult={analysisResult}
+            condition={condition}
+            totalPrice={recommendation.totalPrice}
             onRestart={resetDemo}
           />
         )}
-      </section>
-    </main>
-  );
-}
-
-function AppHeader({ screen, onBack }: { screen: Screen; onBack?: () => void }) {
-  return (
-    <header className="topbar">
-      {onBack ? (
-        <button className="icon-button" onClick={onBack} aria-label="처음으로 돌아가기">←</button>
-      ) : (
-        <div className="brand-mark" aria-hidden="true">M</div>
-      )}
-      <div className="brand-copy">
-        <p className="eyebrow">AI DINING COPILOT</p>
-        <h1>MenuMate</h1>
       </div>
-      <span className="demo-pill">DUMMY</span>
-      <span className="screen-index" aria-label="진행 단계">
-        {screen === "setup" ? "1/4" : screen === "analyzing" ? "2/4" : screen === "results" ? "3/4" : "4/4"}
-      </span>
-    </header>
+    </main>
   );
 }
 
 function SetupScreen({
   people,
   budget,
-  selectedAllergies,
+  peanutAllergy,
+  avoidSpicy,
   onPeopleChange,
   onBudgetChange,
-  onAllergiesChange,
+  onPeanutChange,
+  onSpicyChange,
   onImage,
   onSample,
 }: {
   people: number;
   budget: number;
-  selectedAllergies: AllergyItem[];
-  onPeopleChange: (value: number) => void;
-  onBudgetChange: (value: number) => void;
-  onAllergiesChange: (value: AllergyItem[]) => void;
-  onImage: (event: ChangeEvent<HTMLInputElement>) => void;
+  peanutAllergy: boolean;
+  avoidSpicy: boolean;
+  onPeopleChange: (v: number) => void;
+  onBudgetChange: (v: number) => void;
+  onPeanutChange: (v: boolean) => void;
+  onSpicyChange: (v: boolean) => void;
+  onImage: (e: ChangeEvent<HTMLInputElement>) => void;
   onSample: () => void;
 }) {
-  const [allergySearch, setAllergySearch] = useState("");
-  const [showAllergyPanel, setShowAllergyPanel] = useState(false);
-  const searchResults = useMemo(() => searchAllergies(allergySearch), [allergySearch]);
-  const categorized = useMemo(() => getAllergiesByCategory(), []);
-
-  function toggleAllergy(item: AllergyItem) {
-    const exists = selectedAllergies.find((a) => a.id === item.id);
-    if (exists) {
-      onAllergiesChange(selectedAllergies.filter((a) => a.id !== item.id));
-    } else {
-      onAllergiesChange([...selectedAllergies, item]);
-    }
-  }
-
-  function isSelected(id: string) {
-    return selectedAllergies.some((a) => a.id === id);
-  }
-
   return (
-    <div className="screen-content enter-animation">
-      <section className="hero-card">
-        <p className="step-label">SCAN · DECIDE · ORDER</p>
-        <h2>낯선 메뉴도,<br />한 번에 결정하세요.</h2>
-        <p>메뉴판을 촬영하면 모두의 조건에 맞는 주문 조합을 찾아드려요.</p>
-        <div className="country-badge"><span>🇯🇵</span><div><small>오늘의 체험</small><strong>일본 식당</strong></div></div>
+    <div className="screen-content fade-in" aria-live="polite">
+      <section className="hero-section">
+        <div className="hero-section__badge">
+          <SparklesIcon size={16} />
+          <span>AI 메뉴 추천</span>
+        </div>
+        <h2 className="hero-section__title">오늘은 뭘 먹을까요?</h2>
+        <p className="hero-section__desc">
+          인원, 예산, 알레르기를 알려주면<br />AI가 가장 적합한 메뉴를 찾아드려요.
+        </p>
       </section>
 
-      <section className="form-card">
-        <div className="section-heading">
-          <div><p>OUR TABLE</p><h3>우리의 식사 조건</h3></div>
-          <span>수정 가능</span>
-        </div>
+      <section className="setup-form" aria-label="식사 조건 설정">
+        <h3 className="setup-form__title">식사 조건</h3>
 
-        <div className="control-row">
-          <div className="control-label"><span>👥</span><div><strong>인원</strong><small>함께 식사하는 사람</small></div></div>
+        <div className="setup-form__row">
+          <div className="setup-form__label">
+            <span className="setup-form__icon setup-form__icon--people" aria-hidden="true">👥</span>
+            <div>
+              <strong>인원</strong>
+              <small>함께 식사하는 사람</small>
+            </div>
+          </div>
           <div className="stepper">
             <button onClick={() => onPeopleChange(Math.max(1, people - 1))} aria-label="인원 줄이기">−</button>
             <strong>{people}명</strong>
@@ -275,259 +201,296 @@ function SetupScreen({
           </div>
         </div>
 
-        <label className="budget-control">
-          <span>💴</span>
-          <div><strong>총예산</strong><small>현지 통화 기준</small></div>
-          <div className="budget-input"><b>¥</b><input type="number" min="1000" step="500" value={budget} onChange={(e) => onBudgetChange(Number(e.target.value))} aria-label="총예산" /></div>
-        </label>
-
-        {/* 알레르기 검색 엔진 섹션 */}
-        <div className="allergy-section">
-          <div className="allergy-header">
-            <div className="control-label"><span>⚠️</span><div><strong>알레르기 & 식이제한</strong><small>검색해서 추가하세요 ({selectedAllergies.length}개 선택됨)</small></div></div>
-            <button className="allergy-panel-toggle" onClick={() => setShowAllergyPanel(!showAllergyPanel)}>
-              {showAllergyPanel ? "접기" : "전체 보기"}
-            </button>
-          </div>
-
-          {/* 선택된 알레르기 태그들 */}
-          {selectedAllergies.length > 0 && (
-            <div className="selected-allergies">
-              {selectedAllergies.map((item) => (
-                <button key={item.id} className="allergy-tag active" onClick={() => toggleAllergy(item)}>
-                  <span>{item.emoji}</span>
-                  <span>{item.name}</span>
-                  <i>×</i>
-                </button>
-              ))}
+        <div className="setup-form__row">
+          <div className="setup-form__label">
+            <span className="setup-form__icon setup-form__icon--budget" aria-hidden="true">💴</span>
+            <div>
+              <strong>총예산</strong>
+              <small>현지 통화 기준</small>
             </div>
-          )}
-
-          {/* 검색 입력 */}
-          <div className="allergy-search-box">
+          </div>
+          <label className="budget-input">
+            <b>¥</b>
             <input
-              type="text"
-              placeholder="알레르기 검색 (예: 땅콩, milk, エビ, gluten...)"
-              value={allergySearch}
-              onChange={(e) => setAllergySearch(e.target.value)}
-              onFocus={() => setShowAllergyPanel(true)}
-              aria-label="알레르기 검색"
+              type="number"
+              min="1000"
+              step="500"
+              value={budget}
+              onChange={(e) => onBudgetChange(Number(e.target.value))}
+              aria-label="총예산"
             />
-            {allergySearch && (
-              <button className="search-clear" onClick={() => setAllergySearch("")}>×</button>
-            )}
-          </div>
+          </label>
+        </div>
 
-          {/* 검색 결과 */}
-          {allergySearch && searchResults.length > 0 && (
-            <div className="allergy-search-results">
-              {searchResults.slice(0, 10).map((item) => (
-                <button
-                  key={item.id}
-                  className={`allergy-result-item ${isSelected(item.id) ? "selected" : ""}`}
-                  onClick={() => toggleAllergy(item)}
-                >
-                  <span className="result-emoji">{item.emoji}</span>
-                  <div className="result-info">
-                    <strong>{item.name}</strong>
-                    <small>{item.nameEn} · {item.category}</small>
-                  </div>
-                  <i>{isSelected(item.id) ? "✓" : "+"}</i>
-                </button>
-              ))}
+        <div className="setup-form__toggles">
+          <button
+            className={`option-toggle ${peanutAllergy ? "option-toggle--active option-toggle--danger" : ""}`}
+            onClick={() => onPeanutChange(!peanutAllergy)}
+            aria-pressed={peanutAllergy}
+          >
+            <span className="option-toggle__emoji">🥜</span>
+            <div className="option-toggle__text">
+              <strong>땅콩 알레르기</strong>
+              <small>{peanutAllergy ? "적용 중" : "적용 안 함"}</small>
             </div>
-          )}
-
-          {allergySearch && searchResults.length === 0 && (
-            <div className="allergy-no-results">
-              <p>"{allergySearch}"에 대한 결과가 없습니다</p>
-              <small>다른 언어나 키워드로 검색해 보세요</small>
+            <span className="option-toggle__check">{peanutAllergy ? "✓" : "+"}</span>
+          </button>
+          <button
+            className={`option-toggle ${avoidSpicy ? "option-toggle--active" : ""}`}
+            onClick={() => onSpicyChange(!avoidSpicy)}
+            aria-pressed={avoidSpicy}
+          >
+            <span className="option-toggle__emoji">🌶️</span>
+            <div className="option-toggle__text">
+              <strong>맵지 않게</strong>
+              <small>{avoidSpicy ? "적용 중" : "적용 안 함"}</small>
             </div>
-          )}
-
-          {/* 전체 카테고리 패널 */}
-          {showAllergyPanel && !allergySearch && (
-            <div className="allergy-panel">
-              {ALLERGY_CATEGORIES.map((category) => (
-                <div key={category} className="allergy-category">
-                  <h4>{category}</h4>
-                  <div className="allergy-grid">
-                    {categorized[category]?.map((item) => (
-                      <button
-                        key={item.id}
-                        className={`allergy-chip ${isSelected(item.id) ? "active" : ""}`}
-                        onClick={() => toggleAllergy(item)}
-                      >
-                        <span>{item.emoji}</span>
-                        <span>{item.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+            <span className="option-toggle__check">{avoidSpicy ? "✓" : "+"}</span>
+          </button>
         </div>
       </section>
 
-      <label className="scan-card">
+      <label className="scan-button">
         <input type="file" accept="image/*" capture="environment" onChange={onImage} />
-        <span className="camera-icon" aria-hidden="true">▣</span>
-        <div><strong>메뉴판 촬영하기</strong><small>A4 메뉴가 화면에 모두 들어오게 찍어주세요</small></div>
-        <b>→</b>
+        <span className="scan-button__icon" aria-hidden="true">📷</span>
+        <div className="scan-button__text">
+          <strong>메뉴판 촬영하기</strong>
+          <small>메뉴가 화면에 모두 들어오게 찍어주세요</small>
+        </div>
+        <span className="scan-button__arrow">→</span>
       </label>
-      <button className="sample-button" onClick={onSample}>사진 없이 샘플 메뉴로 체험하기</button>
-      <p className="safety-note">알레르기 분석은 참고용이며 실제 성분과 교차오염 여부는 직원에게 확인하세요.</p>
+
+      <button className="sample-link" onClick={onSample}>
+        사진 없이 샘플 메뉴로 체험하기
+      </button>
+
+      <p className="safety-disclaimer">
+        알레르기 분석은 참고용이며 실제 성분과 교차오염 여부는 직원에게 확인하세요.
+      </p>
     </div>
   );
 }
 
 function AnalyzingScreen({ activeStep, previewUrl }: { activeStep: number; previewUrl: string | null }) {
   return (
-    <div className="screen-content analyzing-screen enter-animation">
-      <div className="photo-stage">
+    <div className="screen-content fade-in" aria-live="polite">
+      <div className="analyzing-visual">
         {previewUrl ? (
-          // Blob URL 미리보기는 원본 크기를 이미 클라이언트에서 제한하므로 최적화 대상에서 제외합니다.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewUrl} alt="촬영한 메뉴판 미리보기" />
+          <img src={previewUrl} alt="촬영한 메뉴판 미리보기" className="analyzing-visual__img" />
         ) : (
-          <div className="sample-menu">
+          <div className="analyzing-visual__sample">
             <b>レストラン さくら</b>
             <span>豚骨ラーメン ¥1,000</span>
             <span>担々麺 ¥1,100</span>
             <span>焼き餃子 ¥600</span>
           </div>
         )}
-        <div className="scan-line" />
-        <span className="ai-chip">AI 분석 중</span>
+        <div className="analyzing-visual__scanline" />
+        <span className="analyzing-visual__chip">
+          <SparklesIcon size={12} />
+          AI 분석 중
+        </span>
       </div>
-      <div className="analysis-copy">
-        <p className="step-label">MENU UNDERSTANDING</p>
+
+      <div className="analyzing-copy">
         <h2>메뉴판을 이해하고 있어요</h2>
-        <p>잠시만 기다리면 주문 조합을 보여드릴게요.</p>
+        <p>잠시만 기다리면 추천 조합을 보여드릴게요.</p>
       </div>
-      <ol className="analysis-list">
-        {ANALYSIS_STEPS.map((step, index) => (
-          <li key={step} className={index < activeStep ? "done" : index === activeStep ? "active" : ""}>
-            <span>{index < activeStep ? "✓" : index + 1}</span><p>{step}</p>{index === activeStep && <i />}
+
+      <ol className="analysis-steps">
+        {ANALYSIS_STEPS.map((step, i) => (
+          <li
+            key={step}
+            className={`analysis-step ${i < activeStep ? "analysis-step--done" : i === activeStep ? "analysis-step--active" : ""}`}
+          >
+            <span className="analysis-step__number">
+              {i < activeStep ? <CheckIcon size={12} /> : i + 1}
+            </span>
+            <p className="analysis-step__text">{step}</p>
+            {i === activeStep && <span className="analysis-step__pulse" />}
           </li>
         ))}
       </ol>
-      <div className="dummy-notice"><b>더미 분석 모드</b><span>현재는 서버 호출 없이 준비된 결과를 표시합니다.</span></div>
     </div>
   );
 }
 
-function ResultsScreen({ people, budget, selectedAllergies, previewUrl, analysisResult, analysisError, onOrder }: { people: number; budget: number; selectedAllergies: AllergyItem[]; previewUrl: string | null; analysisResult: AnalysisResult | null; analysisError: string | null; onOrder: () => void }) {
-  // 실제 AI 결과가 있으면 사용, 없으면 더미 데이터 폴백
-  const menuItems = analysisResult?.menuItems ?? mockMenuItems;
-  const rec = analysisResult?.recommendation ?? recommendation;
-  const warnings = analysisResult?.allergyWarnings ?? [];
-  const excludedCount = menuItems.filter((item) => item.risk === "danger").length;
+function ResultsScreen({
+  condition,
+  recommendedItems,
+  menuItems,
+  totalPrice,
+  appState,
+  onOrder,
+  onRetry,
+}: {
+  condition: Condition;
+  recommendedItems: { name: string; quantity: number; price: number; risk?: string; evidence?: string }[];
+  menuItems: MockMenuItem[];
+  totalPrice: number;
+  appState: AppState;
+  onOrder: () => void;
+  onRetry: () => void;
+}) {
+  const [showAllMenus, setShowAllMenus] = useState(false);
+  const excludedCount = condition.allergies.includes("땅콩")
+    ? menuItems.filter((m) => m.risk === "danger").length
+    : 0;
+
+  if (appState === "loading") return <LoadingState />;
+  if (appState === "error") return <ErrorState onRetry={onRetry} />;
+  if (appState === "empty") return <EmptyState />;
 
   return (
-    <div className="screen-content enter-animation results-screen">
-      {analysisError && (
-        <div className="dummy-notice" style={{ marginBottom: 12 }}><b>폴백 모드</b><span>{analysisError}</span></div>
-      )}
-
-      <section className="result-summary">
-        <div className="result-icon">✓</div>
-        <div><p>분석 완료</p><h2>{menuItems.length}개 메뉴를 찾았어요</h2><span>{people}명 · 예산 ¥{budget.toLocaleString()} · 알레르기 {selectedAllergies.length}개 적용</span></div>
-        {previewUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewUrl} alt="분석한 메뉴판" />
-        )}
-      </section>
-
-      {selectedAllergies.length > 0 && excludedCount > 0 && (
-        <div className="alert-card"><span>⚠️</span><div><strong>알레르기 위험 메뉴 {excludedCount}개 제외</strong><p>{selectedAllergies.map(a => a.name).join(", ")} 관련 메뉴는 추천에 포함하지 않았어요.</p></div></div>
-      )}
-
-      {warnings.length > 0 && warnings.map((w, i) => (
-        <div key={i} className="alert-card" style={{ marginTop: 8 }}><span>🔍</span><div><p>{w}</p></div></div>
-      ))}
-
-      <div className="section-heading menu-heading"><div><p>RECOGNIZED MENU</p><h3>인식한 메뉴</h3></div><button>전체 보기</button></div>
-      <div className="menu-list">
-        {menuItems.slice(0, 6).map((item) => (
-          <article className="menu-item" key={item.id}>
-            <div className={`risk-dot ${item.risk}`} />
-            <div className="menu-copy"><small>{item.sourceName}</small><strong>{item.translatedName}</strong><p>{item.evidence}</p></div>
-            <b>¥{item.price.toLocaleString()}</b>
-          </article>
-        ))}
-      </div>
-
-      <section className="recommend-card">
-        <div className="recommend-top"><span>BEST MATCH</span><b>조건 일치</b></div>
-        <h3>모두를 위한 추천 조합</h3>
-        <p className="recommend-reason">{rec.reason ?? `${people}명이 먹기 충분하고, 알레르기 위험 메뉴를 제외했어요.`}</p>
-        <div className="recommend-items">
-          {rec.items.map((item) => <div key={item.name}><span><i>{item.emoji}</i>{item.name}</span><span>× {item.quantity}</span><b>¥{item.price.toLocaleString()}</b></div>)}
+    <div className="screen-content fade-in results-layout" aria-live="polite">
+      {/* AI 분석 완료 배너 */}
+      <section className="ai-banner">
+        <div className="ai-banner__icon">
+          <SparklesIcon size={20} />
         </div>
-        <div className="total-row"><div><small>총 주문 금액</small><strong>¥{rec.totalPrice.toLocaleString()}</strong></div><div><small>예산 잔액</small><strong>¥{Math.max(0, budget - rec.totalPrice).toLocaleString()}</strong></div></div>
+        <div className="ai-banner__content">
+          <span className="ai-banner__label">AI 분석 완료</span>
+          <h2 className="ai-banner__title">추천 메뉴 조합을 찾았어요</h2>
+          <p className="ai-banner__desc">
+            예산과 알레르기 조건을 고려해 추천했어요.
+          </p>
+        </div>
       </section>
 
-      <button className="primary-button" onClick={onOrder}>이 조합으로 주문하기 <span>→</span></button>
-      <p className="safety-note">⚠️ 메뉴판에서 확인할 수 없는 조리유·교차오염 정보는 직원에게 확인하세요.</p>
+      {/* 조건 요약 */}
+      <ConditionSummary condition={condition} />
+
+      {/* 위험 경고 */}
+      {excludedCount > 0 && (
+        <div className="allergy-alert" role="alert">
+          <span className="allergy-alert__icon">🥜</span>
+          <div className="allergy-alert__content">
+            <strong>땅콩이 확인된 메뉴 {excludedCount}개 제외</strong>
+            <p>탄탄멘과 피넛 냉두부는 추천에 포함하지 않았어요.</p>
+          </div>
+        </div>
+      )}
+
+      {/* AI 추천 결과 */}
+      <section className="recommendation-section" aria-label="AI 추천 메뉴">
+        <div className="recommendation-section__header">
+          <h3>
+            <SparklesIcon size={16} />
+            AI 추천
+          </h3>
+          <span className="recommendation-section__match">조건 일치 96%</span>
+        </div>
+        <p className="recommendation-section__reason">
+          {condition.people}명이 먹기 충분하고, {condition.allergies.join("과 ")} 메뉴를 제외했어요.
+        </p>
+        <div className="recommendation-section__cards">
+          {recommendedItems.map((item) => (
+            <RecommendationCard
+              key={item.name}
+              item={{
+                ...item,
+                risk: item.risk as "safe" | "caution" | "danger" | undefined,
+              }}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* 가격 요약 */}
+      <PriceSummary
+        totalPrice={totalPrice}
+        people={condition.people}
+        budget={condition.budget}
+      />
+
+      {/* 전체 메뉴 리스트 */}
+      <section className="all-menus" aria-label="인식한 전체 메뉴">
+        <div className="all-menus__header">
+          <h3>인식한 메뉴</h3>
+          <button
+            className="all-menus__toggle"
+            onClick={() => setShowAllMenus(!showAllMenus)}
+          >
+            {showAllMenus ? "접기" : "전체 보기"}
+          </button>
+        </div>
+        <div className="all-menus__list">
+          {(showAllMenus ? menuItems : menuItems.slice(0, 4)).map((item) => (
+            <MenuItemCard key={item.id} item={item} />
+          ))}
+        </div>
+      </section>
+
+      {/* 주문 버튼 */}
+      <button className="primary-cta" onClick={onOrder}>
+        <UtensilsIcon size={18} />
+        이 조합으로 주문하기
+      </button>
+
+      <p className="safety-disclaimer">
+        ⚠️ 메뉴판에서 확인할 수 없는 조리유·교차오염 정보는 직원에게 확인하세요.
+      </p>
     </div>
   );
 }
 
-function OrderScreen({ splitAmounts, selectedAllergies, analysisResult, onRestart }: { splitAmounts: number[]; selectedAllergies: AllergyItem[]; analysisResult: AnalysisResult | null; onRestart: () => void }) {
-  const rec = analysisResult?.recommendation ?? recommendation;
-  const orderText = analysisResult?.orderText ?? {
-    local: "豚骨ラーメンを一つ、\n醤油ラーメンを一つ、\nチャーシュー丼を一つ、\n焼き餃子を一つお願いします。",
-    korean: "돈코츠라멘 하나, 쇼유라멘 하나, 차슈덮밥 하나, 교자 하나 주세요.",
-  };
-  const allergyQ = analysisResult?.allergyQuestion ?? {
-    local: selectedAllergies.map(a => `${a.nameEn}アレルギーがあります。`).join("") + "料理やソースに含まれていますか？",
-    korean: selectedAllergies.map(a => a.name).join(", ") + " 알레르기가 있습니다. 음식이나 소스에 들어가나요?",
-  };
-
+function OrderScreen({
+  condition,
+  totalPrice,
+  onRestart,
+}: {
+  condition: Condition;
+  totalPrice: number;
+  onRestart: () => void;
+}) {
   return (
-    <div className="screen-content enter-animation order-screen">
-      <section className="order-hero">
-        <span>🇯🇵 직원에게 이 화면을 보여주세요</span>
-        <p dangerouslySetInnerHTML={{ __html: orderText.local.replace(/\n/g, "<br/>") }} />
-        <small>{orderText.korean}</small>
+    <div className="screen-content fade-in" aria-live="polite">
+      <section className="order-card">
+        <span className="order-card__badge">🇯🇵 직원에게 이 화면을 보여주세요</span>
+        <p className="order-card__japanese">
+          豚骨ラーメンを一つ、<br />醤油ラーメンを一つ、<br />チャーシュー丼を一つ、<br />焼き餃子を一つお願いします。
+        </p>
+        <small className="order-card__korean">
+          돈코츠라멘 하나, 쇼유라멘 하나, 차슈덮밥 하나, 교자 하나 주세요.
+        </small>
       </section>
 
-      {selectedAllergies.length > 0 && (
-        <section className="allergy-question">
-          <div className="question-title"><span>⚠️</span><div><p>ALLERGY CHECK</p><h3>알레르기 확인 문장</h3></div></div>
-          <blockquote dangerouslySetInnerHTML={{ __html: allergyQ.local.replace(/\n/g, "<br/>") }} />
-          <p>{allergyQ.korean}</p>
-          <button onClick={() => navigator.clipboard?.writeText(allergyQ.local)}>문장 복사하기</button>
+      {condition.allergies.includes("땅콩") && (
+        <section className="allergy-phrase" aria-label="알레르기 확인 문장">
+          <div className="allergy-phrase__header">
+            <span>🥜</span>
+            <div>
+              <small>ALLERGY CHECK</small>
+              <h3>알레르기 확인 문장</h3>
+            </div>
+          </div>
+          <blockquote className="allergy-phrase__quote">
+            落花生アレルギーがあります。<br />料理やソースに落花生が含まれていますか？
+          </blockquote>
+          <p className="allergy-phrase__translation">
+            땅콩 알레르기가 있습니다. 음식이나 소스에 땅콩이 들어가나요?
+          </p>
+          <button
+            className="allergy-phrase__copy"
+            onClick={() => navigator.clipboard?.writeText(
+              "落花生アレルギーがあります。料理やソースに落花生が含まれていますか？"
+            )}
+          >
+            문장 복사하기
+          </button>
         </section>
       )}
 
-      <section className="split-card">
-        <div className="section-heading"><div><p>SPLIT THE BILL</p><h3>더치페이</h3></div><strong>총 ¥{rec.totalPrice.toLocaleString()}</strong></div>
-        <div className="split-list">
-          {splitAmounts.map((amount, index) => <div key={index}><span>{String.fromCharCode(65 + index)}</span><p>{index + 1}번째 사람</p><strong>¥{amount.toLocaleString()}</strong></div>)}
-        </div>
-      </section>
+      <SplitBillCard totalPrice={totalPrice} people={condition.people} />
 
-      <button className="primary-button" onClick={onRestart}>처음부터 다시 체험하기</button>
-      <p className="safety-note">MenuMate의 분석은 참고용입니다. 알레르기와 교차오염 여부는 반드시 식당에 직접 확인하세요.</p>
+      <button className="primary-cta primary-cta--outline" onClick={onRestart}>
+        처음부터 다시 체험하기
+      </button>
+
+      <p className="safety-disclaimer">
+        Safe Plate의 분석은 참고용입니다. 알레르기와 교차오염 여부는 반드시 식당에 직접 확인하세요.
+      </p>
     </div>
   );
-}
-
-
-/** 파일을 Base64 문자열로 변환 */
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      // data:image/jpeg;base64,... 에서 base64 부분만 추출
-      const base64 = result.split(",")[1];
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }
