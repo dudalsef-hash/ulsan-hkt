@@ -312,7 +312,7 @@ export function validateRecommendation(
       total_price: totalPrice,
       total_budget: roundMoney(conditions.budget),
       remaining_budget: roundMoney(conditions.budget - totalPrice),
-      currency: items[0]?.currency ?? "JPY",
+      currency: items[0]?.currency ?? "KRW",
       reason: selection.reason.trim(),
     },
     has_alternative: !repeatsPrevious,
@@ -534,7 +534,7 @@ function choosePrimaryCurrency(menus: AnalyzedMenuItem[]): string {
     const currency = menu.currency.toUpperCase();
     counts.set(currency, (counts.get(currency) ?? 0) + 1);
   }
-  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "JPY";
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "KRW";
 }
 
 function combinationSignature(

@@ -356,3 +356,17 @@ button { color: inherit; }
 .allergy-chip:hover { border-color: #9bc8b5; background: #f0faf5; }
 .allergy-chip.active { border-color: #e6aaa3; color: #8e2b27; background: var(--red-soft); }
 .allergy-chip span:first-child { font-size: 12px; }
+
+/* === 감지된 언어 배지 === */
+.detected-language-badge { display: inline-flex; align-items: center; gap: 6px; margin: 8px 0; padding: 6px 12px; border-radius: 999px; background: #e8f4f0; border: 1px solid #b8d9cc; font-size: 11px; font-weight: 700; color: #0d6a4e; }
+
+/* === 통화 선택기 === */
+.currency-selector { padding: 4px 8px; border: 1px solid #cbd9d2; border-radius: 8px; background: #f8faf9; color: var(--green); font-size: 11px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.currency-selector:hover { background: #f0faf5; border-color: var(--green); }
+.currency-picker { max-height: 180px; overflow-y: auto; margin-top: 8px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--white); box-shadow: 0 8px 20px rgba(33, 56, 46, .08); display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.currency-option { display: flex; align-items: center; gap: 5px; padding: 7px 8px; border: 1px solid transparent; border-radius: 8px; background: transparent; font-size: 10px; cursor: pointer; text-align: left; }
+.currency-option:hover { background: #f0faf5; border-color: #b8d9cc; }
+.currency-option.active { background: #e8f5ee; border-color: var(--green); }
+.currency-option-symbol { font-weight: 800; font-size: 12px; min-width: 18px; }
+.currency-option-code { font-weight: 700; color: var(--ink); }
+.currency-option-name { color: var(--muted); font-size: 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

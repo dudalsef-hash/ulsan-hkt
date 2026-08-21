@@ -34,18 +34,40 @@ interface GeminiInteractionPayload {
   steps?: GeminiInteractionStep[];
 }
 
-const ANALYSIS_PROMPT = `이 사진이 실제 음식점 메뉴판인지 먼저 확인하고, 메뉴판이면 보이는 메뉴를 구조화하세요.
+const ANALYSIS_PROMPT = `You are a multilingual restaurant menu analysis AI. Analyze the uploaded menu photo following these rules:
 
-- 사진에서 실제로 읽을 수 있는 메뉴만 menus에 포함합니다. 메뉴판에 없는 메뉴를 추가하지 않습니다.
-- 메뉴명이 읽히지 않는 항목은 만들지 않습니다.
-- 가격과 통화가 불명확하면 반드시 null을 반환합니다.
-- original_description은 사진에 설명이 실제로 보이는 경우만 원문으로 반환하고, 없으면 null입니다.
-- korean_description은 읽힌 메뉴명과 설명을 근거로 한국인이 이해하기 쉬운 1~2문장으로 작성합니다.
-- ingredients와 allergens는 사진 표기 또는 일반적인 음식 지식에 근거할 수 있지만, 일반 지식을 사용했다면 각 메뉴의 warning에 반드시 'AI 추정'임과 매장 확인이 필요함을 적습니다.
-- 알레르기 정보는 확정 정보처럼 표현하지 않습니다.
-- 매운맛을 판단할 근거가 없으면 spicy_level은 unknown입니다.
-- 사진이 메뉴판이 아니거나 너무 흐리거나 글자가 너무 작아 신뢰할 수 있게 읽을 수 없다면 menus를 빈 배열로 반환하고 warnings에 사용자가 다시 촬영할 수 있는 한국어 안내를 넣습니다.
-- success는 항상 true로 반환합니다. 서버가 검증 후 최종 성공/실패 응답을 결정합니다.`;
+1. LANGUAGE DETECTION
+- Automatically detect the language(s) of the menu. Return detected language codes in detected_language field.
+- If multiple languages are present (e.g., Japanese + English), detect ALL languages.
+- Support ALL languages including but not limited to: ko, en, ja, zh-CN, zh-TW, es, fr, de, it, pt, ru, th, vi, id, ms, tl, hi, ar, tr, nl, pl, uk, sv, da, no, fi, cs, el, he, ro.
+
+2. MENU EXTRACTION
+- Only include menus that are actually readable in the photo. Do NOT invent menus.
+- Preserve the original menu name EXACTLY as written (original_name).
+- If the original text is in Japanese, keep it in Japanese. If English, keep English. Never translate the original.
+- Provide korean_name as a natural Korean translation of the menu name.
+- Provide korean_description as a 1-2 sentence Korean explanation of the dish.
+
+3. PRICE & CURRENCY
+- Extract price and currency from the menu. Return null if unclear.
+- Detect currency automatically (JPY, KRW, USD, EUR, GBP, CNY, THB, VND, etc.)
+- Do NOT assume any default currency. Only return what you can actually read.
+
+4. INGREDIENTS & ALLERGENS
+- Infer main ingredients from the menu name, description, or general food knowledge.
+- If using general knowledge (not explicitly written), add a warning noting "AI 추정" and that staff confirmation is needed.
+- Never present allergy information as confirmed fact.
+- Detect allergens in ANY language (e.g., peanut, ピーナッツ, 花生, cacahuète, etc.)
+
+5. SPICY LEVEL & DIETARY
+- If there is no evidence of spiciness, set spicy_level to "unknown".
+- Consider vegetarian/vegan information if available.
+
+6. VALIDATION
+- If the photo is NOT a menu, is too blurry, or text is unreadable, return empty menus array and add a Korean warning.
+- success is always true. The server decides final success/failure.
+
+7. original_description: only include if actually visible in the photo (in original language), otherwise null.`;
 
 export async function handleAnalyzeMenuRequest(
   request: Request,
