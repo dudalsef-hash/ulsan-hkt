@@ -22,6 +22,11 @@ import type {
   MenuRecommendationSuccess,
 } from "../lib/menu-recommendation";
 import { ConditionSummary } from "./components/ConditionSummary";
+import {
+  buildAllergyCheckPhrase,
+  buildOrderPhrase,
+  mergeRecommendationQuantities,
+} from "../lib/order-display";
 
 type Screen = "setup" | "analyzing" | "results" | "order";
 type MenuPhotoState =
@@ -242,7 +247,13 @@ export default function Home() {
         <AppHeader
           screen={screen}
           isSample={isSample}
-          onBack={screen === "setup" ? undefined : resetAnalysis}
+          onBack={
+            screen === "setup"
+              ? undefined
+              : screen === "order"
+                ? () => setScreen("results")
+                : resetAnalysis
+          }
         />
 
         {screen === "setup" && (
@@ -286,6 +297,8 @@ export default function Home() {
             people={people}
             selectedAllergies={selectedAllergies}
             selectedQuantities={selectedQuantities}
+            onSelectedQuantitiesChange={setSelectedQuantities}
+            onBack={() => setScreen("results")}
             onRestart={resetAnalysis}
           />
         )}
@@ -641,13 +654,39 @@ function ResultsScreen({
   }
 
   function applyRecommendation(result: MenuRecommendationSuccess) {
-    const next = { ...selectedQuantities };
-    for (const item of result.recommendation.items) {
-      next[item.menu_id] = (next[item.menu_id] ?? 0) + item.quantity;
+    try {
+      const hasMismatchedMenu = result.recommendation.items.some((item) => {
+        const match = /^menu-(\d+)$/.exec(item.menu_id);
+        const menu = match ? analysis.menus[Number(match[1])] : undefined;
+        return (
+          !menu ||
+          menu.original_name !== item.original_name ||
+          menu.korean_name !== item.korean_name ||
+          menu.price !== item.unit_price
+        );
+      });
+      if (hasMismatchedMenu) {
+        throw new Error("추천 결과가 현재 분석한 메뉴와 일치하지 않아 주문에 추가하지 않았어요.");
+      }
+      const next = mergeRecommendationQuantities(
+        selectedQuantities,
+        result.recommendation.items,
+        analysis.menus.length,
+      );
+      onSelectedQuantitiesChange(next);
+      setSelectionMessage(null);
+      setRecommendationOpen(false);
+      onOrder();
+    } catch (error) {
+      setRecommendationState({
+        status: "error",
+        result: {
+          success: false,
+          error: error instanceof Error ? error.message : "추천 메뉴를 주문에 추가하지 못했어요.",
+          code: "INVALID_AI_SELECTION",
+        },
+      });
     }
-    onSelectedQuantitiesChange(next);
-    setSelectionMessage("추천 조합을 선택한 메뉴에 추가했어요.");
-    setRecommendationOpen(false);
   }
 
   const selectedMenus = Object.entries(selectedQuantities).flatMap(
@@ -754,12 +793,16 @@ function OrderScreen({
   people,
   selectedAllergies,
   selectedQuantities,
+  onSelectedQuantitiesChange,
+  onBack,
   onRestart,
 }: {
   analysis: MenuAnalysisResult;
   people: number;
   selectedAllergies: AllergyItem[];
   selectedQuantities: Record<string, number>;
+  onSelectedQuantitiesChange: (value: Record<string, number>) => void;
+  onBack: () => void;
   onRestart: () => void;
 }) {
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
@@ -767,8 +810,29 @@ function OrderScreen({
   const total = selectedMenus.reduce((sum, item) => sum + item.subtotal, 0);
   const currency = selectedMenus[0]?.menu.currency ?? "JPY";
   const splitAmounts = splitTotal(total, people);
-  const orderText = buildOrderText(selectedMenus, analysis.detected_language);
-  const allergyQuestion = buildAllergyQuestion(selectedAllergies, analysis.detected_language);
+  const orderText = buildOrderPhrase({
+    language: analysis.detected_language,
+    items: selectedMenus.map(({ menu, quantity }) => ({
+      originalName: menu.original_name,
+      koreanName: menu.korean_name,
+      quantity,
+    })),
+  });
+  const allergyQuestion = buildAllergyCheckPhrase({
+    language: analysis.detected_language,
+    allergies: selectedAllergies.map((item) => ({
+      koreanName: item.name,
+      englishName: item.nameEn,
+      localName: getJapaneseAllergyName(item),
+    })),
+  });
+
+  function changeQuantity(menuId: string, delta: number) {
+    const next = { ...selectedQuantities };
+    const quantity = Math.max(1, (next[menuId] ?? 0) + delta);
+    next[menuId] = quantity;
+    onSelectedQuantitiesChange(next);
+  }
 
   async function copyText(text: string, label: string) {
     try {
@@ -782,7 +846,7 @@ function OrderScreen({
   return (
     <div className="screen-content enter-animation order-screen">
       <section className="order-hero">
-        <span>🌏 직원에게 이 화면을 보여주세요</span>
+        <span>注文はこちらです · 직원에게 이 화면을 보여주세요</span>
         <p>{orderText.local.split("\n").map((line, index) => <span key={`${line}-${index}`}>{line}{index < orderText.local.split("\n").length - 1 && <br />}</span>)}</p>
         <small>{orderText.korean}</small>
         <button type="button" className="order-copy-button" onClick={() => void copyText(orderText.local, "주문 문장")}>주문 문장 복사하기</button>
@@ -792,7 +856,15 @@ function OrderScreen({
         <div className="section-heading"><div><p>ORDER MENU</p><h3>주문할 메뉴</h3></div><strong>{formatPrice(total, currency)}</strong></div>
         <div className="selected-combination-list">
           {selectedMenus.map(({ menuId, menu, quantity, subtotal }) => (
-            <div key={menuId}><span>{menu.korean_name || menu.original_name}</span><small>{quantity}개</small><b>{formatPrice(subtotal, menu.currency)}</b></div>
+            <div key={menuId}>
+              <span>{menu.korean_name || menu.original_name}</span>
+              <div className="order-quantity-controls" aria-label={`${menu.korean_name || menu.original_name} 수량`}>
+                <button type="button" onClick={() => changeQuantity(menuId, -1)} aria-label="수량 줄이기">−</button>
+                <small>{quantity}개</small>
+                <button type="button" onClick={() => changeQuantity(menuId, 1)} aria-label="수량 늘리기">+</button>
+              </div>
+              <b>{formatPrice(subtotal, menu.currency)}</b>
+            </div>
           ))}
         </div>
       </section>
@@ -814,6 +886,10 @@ function OrderScreen({
       </section>
 
       {copyMessage && <p className="copy-message" role="status">{copyMessage}</p>}
+      <div className="order-navigation-actions">
+        <button type="button" className="secondary-order-button" onClick={onBack}>이전으로</button>
+        <button type="button" className="secondary-order-button" onClick={onBack}>주문 수정하기</button>
+      </div>
       <button className="primary-button" onClick={onRestart}>처음부터 다시 시작하기</button>
       <p className="safety-note">알레르기 정보는 AI 분석 결과이므로 주문 전 매장에 다시 확인해주세요.</p>
     </div>
@@ -925,7 +1001,7 @@ function RecommendationPopup({
                 다른 조합 보기
               </button>
               <button type="button" className="select-recommendation-button" onClick={() => onSelect(state.result)}>
-                이 조합 선택하기
+                이 메뉴로 주문하기
               </button>
             </div>
           </>
@@ -1182,36 +1258,8 @@ function splitTotal(total: number, people: number): number[] {
   return Array.from({ length: safePeople }, (_, index) => base + (index < remainder ? 1 : 0));
 }
 
-function buildOrderText(
-  selectedMenus: ReturnType<typeof getSelectedMenus>,
-  detectedLanguage: string | null,
-) {
-  const korean = `${selectedMenus.map(({ menu, quantity }) => `${menu.korean_name || menu.original_name} ${quantity}개`).join(", ")} 주세요.`;
-  if (detectedLanguage === "ja") {
-    return {
-      local: `${selectedMenus.map(({ menu, quantity }) => `${menu.original_name}を${quantity}つ`).join("、\n")}お願いします。`,
-      korean,
-    };
-  }
-  return {
-    local: `${selectedMenus.map(({ menu, quantity }) => `${menu.original_name} × ${quantity}`).join(",\n")}`,
-    korean,
-  };
-}
-
-function buildAllergyQuestion(selected: AllergyItem[], detectedLanguage: string | null) {
-  const koreanNames = selected.map((item) => item.name).join(", ");
-  const englishNames = selected.map((item) => item.nameEn).join(", ");
-  if (detectedLanguage === "ja") {
-    return {
-      local: `${englishNames}のアレルギー・食事制限があります。料理やソース、調理過程に含まれていますか？`,
-      korean: `${koreanNames} 알레르기·식이제한이 있습니다. 음식, 소스 또는 조리 과정에 포함되는지 확인해주세요.`,
-    };
-  }
-  return {
-    local: `I have the following allergies or dietary restrictions: ${englishNames}. Does this order contain any of them?`,
-    korean: `${koreanNames} 알레르기·식이제한이 있습니다. 주문 전 포함 여부를 확인해주세요.`,
-  };
+function getJapaneseAllergyName(item: AllergyItem): string | undefined {
+  return item.keywords.find((keyword) => /[ぁ-んァ-ヶ一-龠]/.test(keyword));
 }
 
 function createSampleAnalysis(): MenuAnalysisResult {

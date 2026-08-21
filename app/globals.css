@@ -277,6 +277,12 @@ button { color: inherit; }
 .order-hero small { display: block; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.15); color: #cde8dc; font-size: 9px; line-height: 1.5; }
 .order-copy-button { width: 100%; margin-top: 14px; padding: 9px; border: 1px solid rgba(255,255,255,.28); border-radius: 10px; color: var(--white); background: rgba(255,255,255,.1); font-size: 10px; font-weight: 800; cursor: pointer; }
 .order-selection { margin-bottom: 14px; }
+.order-selection .selected-combination-list > div { grid-template-columns: minmax(0, 1fr) auto auto; }
+.order-quantity-controls { display: inline-flex; align-items: center; gap: 7px; }
+.order-quantity-controls button { display: grid; width: 27px; height: 27px; padding: 0; place-items: center; border: 1px solid #b9d0c5; border-radius: 9px; color: var(--green-dark); background: var(--white); font-size: 15px; font-weight: 900; cursor: pointer; }
+.order-quantity-controls small { min-width: 24px; color: var(--ink); font-weight: 800; text-align: center; }
+.order-navigation-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 13px; }
+.secondary-order-button { min-height: 43px; padding: 10px; border: 1px solid #b8ccc2; border-radius: 12px; color: var(--green-dark); background: var(--white); font-size: 10px; font-weight: 900; cursor: pointer; }
 .copy-message { margin: 10px 0; padding: 9px 11px; border-radius: 10px; color: var(--green-dark); background: var(--mint); font-size: 9px; font-weight: 800; text-align: center; }
 .question-title { display: flex; align-items: center; gap: 9px; }
 .question-title > span { font-size: 23px; }

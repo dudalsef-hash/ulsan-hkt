@@ -50,7 +50,7 @@ test("connects the mobile image inputs to the server analysis endpoint", async (
   assert.match(page, /fetch\("\/api\/analyze-menu"/);
   assert.match(page, /fetch\("\/api\/recommend-menu"/);
   assert.match(page, /AI 조합 추천/);
-  assert.match(page, /이 조합 선택하기/);
+  assert.match(page, /이 메뉴로 주문하기/);
   assert.match(page, /선택한 조합으로 주문하기/);
   assert.match(page, /function OrderScreen/);
   assert.match(page, /partitionSelectedConditions/);
