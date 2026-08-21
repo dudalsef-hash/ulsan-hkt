@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Safe Plate — AI 식사 안전 추천</title>
+<style>
+:root {
+  --ink: #1a2b23;
+  --muted: #68766f;
+  --line: #e4ebe7;
+  --surface: #ffffff;
+  --surface-secondary: #f7faf8;
+  --cream: #f4f7f5;
+  --green: #0d6a4e;
+  --green-dark: #07513b;
+  --green-light: #e8f5ef;
+  --red: #b53a35;
+  --red-light: #fef2f0;
+  --red-border: #f0c4be;
+  --white: #ffffff;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--cream); color: var(--ink); line-height: 1.5; }
+.container { max-width: 680px; margin: 0 auto; padding: 16px 16px 48px; }
+
+/* Header */
+.header { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; margin-bottom: 24px; }
+.header-left { display: flex; align-items: center; gap: 10px; }
+.logo { display: grid; width: 36px; height: 36px; place-items: center; border-radius: var(--radius-sm); background: var(--green); color: var(--white); font-size: 14px; font-weight: 900; letter-spacing: -0.08em; }
+.brand-label { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; color: var(--green); text-transform: uppercase; }
+.brand-title { font-size: 18px; font-weight: 800; letter-spacing: -0.03em; color: var(--green); }
+
+/* Hero */
+.hero { text-align: center; padding: 32px 20px; margin-bottom: 24px; background: linear-gradient(145deg, var(--green), var(--green-dark)); border-radius: var(--radius-xl); color: var(--white); }
+.hero-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; background: rgba(255,255,255,0.15); font-size: 11px; font-weight: 700; margin-bottom: 16px; }
+.hero h2 { font-size: 26px; font-weight: 800; letter-spacing: -0.04em; margin-bottom: 10px; }
+.hero p { font-size: 14px; color: rgba(255,255,255,0.8); line-height: 1.6; }
+
+/* Setup Form */
+.setup-form { padding: 20px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-sm); margin-bottom: 16px; }
+.setup-form h3 { font-size: 15px; font-weight: 700; margin-bottom: 16px; }
+.form-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.form-row:last-of-type { border-bottom: none; }
+.form-label { display: flex; align-items: center; gap: 10px; }
+.form-icon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: var(--radius-sm); background: var(--green-light); font-size: 17px; }
+.form-label strong { display: block; font-size: 13px; }
+.form-label small { color: var(--muted); font-size: 11px; }
+
+/* Stepper */
+.stepper { display: flex; align-items: center; gap: 8px; }
+.stepper button { width: 32px; height: 32px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); font-size: 16px; cursor: pointer; display: grid; place-items: center; }
+.stepper strong { min-width: 40px; text-align: center; font-size: 14px; }
+
+/* Budget Input */
+.budget-input { display: flex; align-items: center; gap: 4px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-secondary); }
+.budget-input b { color: var(--green); font-size: 13px; }
+.budget-input input { width: 80px; border: 0; outline: 0; background: transparent; font-size: 14px; font-weight: 700; text-align: right; }
+
+/* Toggle Grid */
+.toggle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+.option-toggle { display: flex; align-items: center; gap: 8px; padding: 12px 10px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); text-align: left; cursor: pointer; }
+.option-toggle.active { border-color: #9bc8b5; background: var(--green-light); }
+.option-toggle.active.danger { border-color: var(--red-border); background: var(--red-light); }
+.option-toggle .emoji { font-size: 18px; flex-shrink: 0; }
+.option-toggle .text strong { display: block; font-size: 11px; }
+.option-toggle .text small { color: var(--muted); font-size: 10px; }
+.option-toggle .check { display: grid; width: 20px; height: 20px; place-items: center; border-radius: 50%; font-size: 11px; font-weight: 700; margin-left: auto; flex-shrink: 0; }
+.option-toggle.active .check { background: var(--green); color: var(--white); }
+.option-toggle.active.danger .check { background: var(--red); color: var(--white); }
+
+/* Scan Button */
+.scan-btn { display: flex; align-items: center; gap: 12px; width: 100%; padding: 16px; border: 0; border-radius: var(--radius-lg); color: var(--white); background: var(--green); box-shadow: var(--shadow-md); cursor: pointer; margin-bottom: 8px; }
+.scan-btn .icon { display: grid; width: 40px; height: 40px; place-items: center; border-radius: var(--radius-sm); background: rgba(255,255,255,0.15); font-size: 18px; }
+.scan-btn .text { flex: 1; text-align: left; }
+.scan-btn .text strong { display: block; font-size: 14px; }
+.scan-btn .text small { color: rgba(255,255,255,0.7); font-size: 11px; }
+.scan-btn .arrow { font-size: 20px; font-weight: 700; }
+
+/* Sample Link */
+.sample-link { display: block; width: 100%; padding: 10px; border: 0; background: transparent; color: var(--green); font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; text-align: center; margin-bottom: 8px; }
+
+/* Disclaimer */
+.disclaimer { text-align: center; font-size: 10px; color: var(--muted); margin-top: 12px; }
+
+/* Responsive */
+@media (max-width: 480px) {
+  .toggle-grid { grid-template-columns: 1fr; }
+  .hero h2 { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">SP</div>
+      <div>
+        <div class="brand-label">AI FOOD SAFETY</div>
+        <div class="brand-title">Safe Plate</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-badge">✦ AI 메뉴 추천</div>
+    <h2>오늘은 뭘 먹을까요?</h2>
+    <p>인원, 예산, 알레르기를 알려주면<br>AI가 가장 적합한 메뉴를 찾아드려요.</p>
+  </section>
+
+  <!-- Setup Form -->
+  <section class="setup-form">
+    <h3>식사 조건</h3>
+
+    <div class="form-row">
+      <div class="form-label">
+        <span class="form-icon">👥</span>
+        <div><strong>인원</strong><small>함께 식사하는 사람</small></div>
+      </div>
+      <div class="stepper">
+        <button>−</button>
+        <strong>3명</strong>
+        <button>＋</button>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-label">
+        <span class="form-icon">💴</span>
+        <div><strong>총예산</strong><small>현지 통화 기준</small></div>
+      </div>
+      <div class="budget-input">
+        <b>¥</b>
+        <input type="number" value="4000">
+      </div>
+    </div>
+
+    <div class="toggle-grid">
+      <button class="option-toggle active danger">
+        <span class="emoji">🥜</span>
+        <div class="text"><strong>땅콩 알레르기</strong><small>적용 중</small></div>
+        <span class="check">✓</span>
+      </button>
+      <button class="option-toggle active">
+        <span class="emoji">🌶️</span>
+        <div class="text"><strong>맵지 않게</strong><small>적용 중</small></div>
+        <span class="check">✓</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Scan Button -->
+  <button class="scan-btn">
+    <span class="icon">📷</span>
+    <div class="text">
+      <strong>메뉴판 촬영하기</strong>
+      <small>메뉴가 화면에 모두 들어오게 찍어주세요</small>
+    </div>
+    <span class="arrow">→</span>
+  </button>
+
+  <!-- Sample Link -->
+  <button class="sample-link">사진 없이 샘플 메뉴로 체험하기</button>
+
+  <!-- Disclaimer -->
+  <p class="disclaimer">알레르기 분석은 참고용이며 실제 성분과 교차오염 여부는 직원에게 확인하세요.</p>
+
+</div>
+</body>
+</html>
