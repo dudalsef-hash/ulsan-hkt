@@ -21,6 +21,11 @@ import type {
   MenuRecommendationResponse,
   MenuRecommendationSuccess,
 } from "../lib/menu-recommendation";
+import {
+  MENU_RISK_LABELS,
+  menuConflictsWithSelectedConditions,
+  resolveMenuRiskLevel,
+} from "../lib/menu-recommendation";
 import { ConditionSummary } from "./components/ConditionSummary";
 import {
   buildAllergyCheckPhrase,
@@ -568,7 +573,7 @@ function ResultsScreen({
 }) {
   const selectedConditionNames = selectedAllergies.map((item) => item.name);
   const matchingMenuCount = analysis.menus.filter((menu) =>
-    menuMatchesSelectedConditions(menu, selectedAllergies),
+    menuConflictsWithSelectedConditions(menu, selectedAllergies),
   ).length;
   const [recommendationOpen, setRecommendationOpen] = useState(false);
   const [recommendationState, setRecommendationState] =
@@ -745,7 +750,12 @@ function ResultsScreen({
       <div className="section-heading menu-heading"><div><p>RECOGNIZED MENU</p><h3>인식한 메뉴</h3></div><span>{avoidSpicy ? "매운맛 확인" : "전체 결과"}</span></div>
       <div className="menu-list detailed-menu-list">
         {analysis.menus.map((item, index) => (
-          <MenuCard item={item} index={index} key={`${item.original_name}-${index}`} />
+          <MenuCard
+            item={item}
+            index={index}
+            selectedAllergies={selectedAllergies}
+            key={`${item.original_name}-${index}`}
+          />
         ))}
       </div>
 
@@ -1011,8 +1021,16 @@ function RecommendationPopup({
   );
 }
 
-function MenuCard({ item, index }: { item: AnalyzedMenuItem; index: number }) {
-  const risk = item.allergens.length > 0 ? "danger" : item.warning ? "caution" : "safe";
+function MenuCard({
+  item,
+  index,
+  selectedAllergies,
+}: {
+  item: AnalyzedMenuItem;
+  index: number;
+  selectedAllergies: AllergyItem[];
+}) {
+  const risk = resolveMenuRiskLevel(item, selectedAllergies);
   const [photoOpen, setPhotoOpen] = useState(false);
   const [photoState, setPhotoState] = useState<MenuPhotoState>({ status: "idle" });
 
@@ -1038,7 +1056,12 @@ function MenuCard({ item, index }: { item: AnalyzedMenuItem; index: number }) {
   return (
     <article className="menu-item detailed-menu-item">
       <div className="menu-title-row">
-        <div className={`risk-dot ${risk}`} />
+        <div
+          className={`risk-dot ${risk}`}
+          role="img"
+          aria-label={MENU_RISK_LABELS[risk]}
+          title={MENU_RISK_LABELS[risk]}
+        />
         <div className="menu-copy">
           <small>{item.original_name || `메뉴 ${index + 1}`}</small>
           <div className="menu-name-row">
@@ -1219,22 +1242,6 @@ function partitionSelectedConditions(selected: AllergyItem[]) {
     else allergies.push(item.name);
   }
   return { allergies, dietaryRestrictions };
-}
-
-function menuMatchesSelectedConditions(menu: AnalyzedMenuItem, selected: AllergyItem[]) {
-  const menuText = [
-    menu.original_name,
-    menu.korean_name,
-    menu.korean_description,
-    ...menu.ingredients,
-    ...menu.allergens,
-  ].join(" ").toLowerCase();
-  return selected.some((item) =>
-    [item.name, item.nameEn, ...item.keywords]
-      .map((keyword) => keyword.toLowerCase().trim())
-      .filter((keyword) => keyword.length > 1)
-      .some((keyword) => menuText.includes(keyword)),
-  );
 }
 
 function getSelectedMenus(

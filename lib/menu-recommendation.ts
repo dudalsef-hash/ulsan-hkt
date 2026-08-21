@@ -320,6 +320,102 @@ export function validateRecommendation(
   };
 }
 
+/* ------------------------------------------------------------------ *
+ * 인식한 메뉴 목록의 상태 점(risk-dot) 판정
+ * 아래 판정은 이 파일의 menuMatchesAllergy() 를 그대로 재사용합니다.
+ * ------------------------------------------------------------------ */
+
+/**
+ * 메뉴명 왼쪽 상태 점의 등급입니다.
+ * globals.css의 `.risk-dot.safe / .caution / .danger` 클래스와 1:1로 대응합니다.
+ *  - safe    초록: 사용자 알레르기와 충돌 없음
+ *  - caution 주황: 판정이 불확실 (안전하다고 단정하지 않음)
+ *  - danger  빨강: 사용자 알레르기와 충돌
+ */
+export type MenuRiskLevel = "safe" | "caution" | "danger";
+
+/** 사용자가 선택한 알레르기/식이제한 항목 (app/allergy-data.ts의 AllergyItem과 구조적으로 호환) */
+export interface SelectedAllergyCondition {
+  name: string;
+  nameEn: string;
+  keywords: string[];
+}
+
+/** 색만으로 상태를 전달하지 않도록 상태 점에 함께 노출하는 텍스트입니다. */
+export const MENU_RISK_LABELS: Record<MenuRiskLevel, string> = {
+  safe: "알레르기 충돌 없음",
+  caution: "알레르기 정보 확인 필요",
+  danger: "알레르기 충돌 위험",
+};
+
+/**
+ * 알레르기 DB의 다국어 keywords로 메뉴 텍스트를 매칭합니다.
+ * (결과 화면에서 "선택 조건 관련 가능성 N개"를 세던 기존 로직을 옮겨온 것입니다.)
+ */
+export function menuMatchesSelectedConditions(
+  menu: AnalyzedMenuItem,
+  selected: SelectedAllergyCondition[],
+): boolean {
+  const menuText = [
+    menu.original_name,
+    menu.korean_name,
+    menu.korean_description,
+    ...menu.ingredients,
+    ...menu.allergens,
+  ].join(" ").toLowerCase();
+  return selected.some((item) =>
+    [item.name, item.nameEn, ...item.keywords]
+      .map((keyword) => keyword.toLowerCase().trim())
+      .filter((keyword) => keyword.length > 1)
+      .some((keyword) => menuText.includes(keyword)),
+  );
+}
+
+/**
+ * 사용자가 입력한 알레르기와 해당 메뉴가 충돌하는지 판정합니다.
+ *
+ * 판정 로직을 새로 만들지 않고, 프로젝트에서 이미 쓰고 있는 두 판정을 재사용합니다.
+ *  1) menuMatchesSelectedConditions - 알레르기 DB keywords 기반 매칭 (결과 화면에서 이미 사용 중)
+ *  2) menuMatchesAllergy - 추천 엔진 getEligibleMenus()가 위험 메뉴를 제외할 때 쓰는 별칭 기반 매칭
+ *
+ * 둘 중 하나라도 충돌로 보면 충돌로 처리합니다(안전 우선).
+ * 덕분에 "추천에서 제외된 메뉴"와 "빨간 점이 찍힌 메뉴"가 서로 어긋나지 않습니다.
+ */
+export function menuConflictsWithSelectedConditions(
+  menu: AnalyzedMenuItem,
+  selected: SelectedAllergyCondition[],
+): boolean {
+  if (selected.length === 0) return false;
+  if (menuMatchesSelectedConditions(menu, selected)) return true;
+  return selected.some((condition) => menuMatchesAllergy(menu, condition.name));
+}
+
+/**
+ * 알레르기 판정을 신뢰할 수 없는 메뉴인지 확인합니다.
+ * 기존 프로젝트의 불확실 처리 방식을 그대로 유지합니다.
+ *  - warning: Gemini가 "추정 정보 또는 직원 확인이 필요한 사항"으로 채우는 필드이며,
+ *             기존 상태 점 코드에서도 caution 사유로 쓰였습니다.
+ *  - 재료와 알레르기 정보가 모두 비어 있으면 화면에 이미 "확인 불가"로 표기되는 상태이므로
+ *    안전하다고 단정할 수 없습니다.
+ */
+export function menuAllergyInfoIsUncertain(menu: AnalyzedMenuItem): boolean {
+  if (menu.warning) return true;
+  return menu.allergens.length === 0 && menu.ingredients.length === 0;
+}
+
+/**
+ * 메뉴명 왼쪽 상태 점의 등급을 결정합니다.
+ * 충돌 > 불확실 > 안전 순으로 확인하므로, 판정할 수 없는 메뉴가 초록색이 되는 일은 없습니다.
+ */
+export function resolveMenuRiskLevel(
+  menu: AnalyzedMenuItem,
+  selected: SelectedAllergyCondition[],
+): MenuRiskLevel {
+  if (menuConflictsWithSelectedConditions(menu, selected)) return "danger";
+  if (menuAllergyInfoIsUncertain(menu)) return "caution";
+  return "safe";
+}
+
 export function menuMatchesAllergy(
   menu: AnalyzedMenuItem,
   allergy: string,
